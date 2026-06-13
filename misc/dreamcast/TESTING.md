@@ -57,7 +57,8 @@ Verify these specifically after code changes:
 7. **Audio poll** — Music + SFX concurrently without glitches; pause/resume music if applicable
 8. **Split-screen** — 2/3/4 player viewports render in correct screen regions
 9. **Gamepad hot-unplug** — Disconnecting a controller clears stuck inputs
-10. **Boot UX** — Press START to skip post-modem wait; offline boot works without network
+11. **Scissor / split-screen** — Viewport regions clip geometry correctly (inventory, split-screen)
+12. **VSync** — Frame pacing stable when vsync enabled in options
 
 ## Known Limitations (not test failures)
 

@@ -177,8 +177,11 @@ struct GPUTexture {
 static struct GPUTexture tex_list[MAX_TEXTURE_COUNT];
 static struct GPUTexture* tex_active;
 
+#if defined(PVR_RAM_SIZE)
+#define _PVR_RAM_SIZE PVR_RAM_SIZE
+#else
 #define _PVR_RAM_SIZE (8 * 1024 * 1024)
-/* PVR_RAM_SIZE is no longer constant in KOS master (devkit/naomi has 16 MB VRAM) */
+#endif
 
 // For PVR2 GPU, highly recommended that multiple textures don't cross the same 2048 byte VRAM page alignment
 // So to avoid this, ensure that each texture is allocated at the start of a 2048 byte VRAM page
@@ -206,6 +209,7 @@ static void InitTexMemory(void) {
     void* base    = pvr_mem_malloc(tmem_avail);
     texmem_base   = (void*)TEXMEM_BLOCK_ROUNDUP((cc_uintptr)base);
 	texmem_blocks = tmem_avail / TEXMEM_BLOCK_SIZE;
+	if (texmem_blocks > TEXMEM_MAX_BLOCKS) texmem_blocks = TEXMEM_MAX_BLOCKS;
 }
 
 static int DefragTexMemory(void) {
@@ -766,6 +770,7 @@ void Gfx_SetFog(cc_bool enabled) {
 	
 	gfx_fogEnabled = enabled;
 	stateDirty     = true;
+	if (enabled && gfx_fogMode >= 0) UpdateFog();
 }
 
 void Gfx_SetFogCol(PackedCol color) {
@@ -1103,6 +1108,8 @@ void Gfx_EndFrame(void) {
 	SubmitList(&listTR);
 	pvr_scene_finish();
 	pvr_wait_ready();
+
+	if (gfx_vsync) vid_waitvbl();
 }
 
 void Gfx_OnWindowResize(void) {
@@ -1127,8 +1134,10 @@ void Gfx_SetViewport(int x, int y, int w, int h) {
 }
 
 void Gfx_SetScissor(int x, int y, int w, int h) {
-	gfx_scissor = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
+	cc_bool active    = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
+	gfx_scissor = active;
 	stateDirty  = true;
+	if (!active) return;
 
 	struct pvr_clip_command {
 		uint32_t cmd; // TA command
@@ -1145,7 +1154,8 @@ void Gfx_SetScissor(int x, int y, int w, int h) {
 	c.ey = ((y + h) >> 5) - 1;
 
 	CommandsList_Append(&listOP, &c);
-	CommandsList_Append(&listPT, &c);
 	CommandsList_Append(&listTR, &c);
+	/* PT list is submitted directly to the TA throughout the frame */
+	SubmitCommands((Vertex*)&c, 1);
 }
 

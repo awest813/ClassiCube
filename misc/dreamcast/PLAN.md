@@ -176,8 +176,9 @@ The backend is a full custom implementation (~1100 lines) with:
 - [ ] Fix color write mask (menu backgrounds, underwater tint, damage flash)
 - [ ] Audit alpha test / punch-through list usage (UI text, block crack overlays, vegetation)
 - [ ] Profile VRAM usage on large worlds; tune `MAX_TEXTURE_COUNT`, `TEXMEM_RESERVED`, `Gfx.MaxTexSize`
-- [ ] Validate scissor (`Gfx_SetScissor` emits `PVR_CMD_USERCLIP`) in inventory and chat overlays
-- [ ] Review fog table updates vs `gfx_fogEnabled` toggles
+- [x] Cap texture block table to compile-time VRAM limit; use `PVR_RAM_SIZE` when provided by KOS
+- [x] Validate scissor (`Gfx_SetScissor`) — PT list clips submitted immediately to TA
+- [x] Review fog table updates vs `gfx_fogEnabled` toggles
 - [x] Confirm texture upload flush requirements after `Gfx_UpdateTexture`
 - [ ] Real-hardware comparison with Flycast for Z-fighting, sorting, and translucent water
 
@@ -202,7 +203,7 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Double-buffer 2D framebuffer blits to reduce menu tearing (`Window_DrawFramebuffer`)
 - [x] Batch SD writes (defer `fs_fat_sync` to `Platform_Free`)
 - [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
-- [ ] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
+- [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention is noted in `Platform_Init`)
 - [ ] Optional: ship a minimal default `classicube.zip` or build step to fetch it
 

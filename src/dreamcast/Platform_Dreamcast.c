@@ -348,6 +348,8 @@ static cc_result VMUFile_Close(cc_file file) {
 	fs_write(fd, pkg_data, pkg_len);
 	fs_close(fd);
 	free(pkg_data);
+	Mem_Free(data);
+	Platform_Log1("VMU options saved (%i bytes)", &pkg_len);
 	return 0;
 }
 

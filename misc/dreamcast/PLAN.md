@@ -122,10 +122,10 @@ Issues explicitly marked in `src/dreamcast/`:
 ### Graphics (`Graphics_Dreamcast.c`)
 
 - [x] `Gfx_ClearColor` / `pvr_set_bg_color` — re-applied each frame via `ApplyBgColor`
-- [ ] `SetColorWrite` — color write mask not implemented
+- [ ] `SetColorWrite` — not supported on PVR2 (depth-only uses `Gfx_DepthOnlyRendering`)
 - [x] `Gfx_UpdateTexture` — PVR RAM from `pvr_mem_malloc` does not need CPU cache flush
 - [x] `Gfx_ClearBuffers` — applies background color when color buffer requested
-- [ ] `Gfx_SetViewport` — matrix may need loading immediately after viewport change
+- [x] `Gfx_SetViewport` — loads viewport matrix to SH4 FPU for split-screen
 
 ### Audio (`Audio_Dreamcast.c`)
 
@@ -194,14 +194,14 @@ The backend is a full custom implementation (~1100 lines) with:
 - [ ] Review `valid_handles[]` state machine vs KOS `snd_stream` API (see KOS PR #1099 note in source)
 - [x] Resolve thread-safety of `AudioBackend_Tick` vs main audio thread
 - [ ] Measure latency and buffer sizes (`AUDIO_MAX_BUFFERS`, `SND_STREAM_BUFFER_MAX`)
-- [ ] `StreamContext_Pause` returns `ERR_NOT_SUPPORTED` — decide if pause menu needs it
+- [x] `StreamContext_Pause` — implemented via `snd_stream_stop`
 
 ### 4. UI, storage & networking (P2)
 
 - [x] Implement `Window_ShowDialog` (modal message for errors / disconnect)
 - [x] Double-buffer 2D framebuffer blits to reduce menu tearing (`Window_DrawFramebuffer`)
 - [x] Batch SD writes (defer `fs_fat_sync` to `Platform_Free`)
-- [ ] Improve boot UX when no network device: shorter timeout, clearer on-screen status
+- [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
 - [ ] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention is noted in `Platform_Init`)
 - [ ] Optional: ship a minimal default `classicube.zip` or build step to fetch it
@@ -212,15 +212,16 @@ Dreamcast defines `CC_BUILD_SPLITSCREEN` but split-screen needs verification:
 
 - [ ] Confirm launcher exposes split-screen entry where appropriate (`LScreens.c` / `Launcher.c` guards)
 - [ ] Test 2–4 controllers with corrected `Gamepads_Process` loop
+- [x] Disconnect stale gamepad state when maple port goes empty
 - [ ] Verify `defaults_dc` bindings feel right (triggers = place/delete, face buttons = jump/chat/inventory)
 - [ ] Keyboard / mouse via Maple: already mapped in `MapKey` — test for direct-connect typing
 - [ ] Virtual keyboard path for chat when no keyboard (`SOFT_KEYBOARD_VIRTUAL`)
 
 ### 6. Build, packaging & docs (P3–P4)
 
-- [ ] Add `IP.BIN` generation instructions to main `readme.md` (currently only in `misc/dreamcast/readme.txt`)
-- [ ] Document `classicube.zip` requirement and minimum contents
-- [ ] Consider committing a prebuilt `IP.BIN` or CI step to generate it (like other console ports)
+- [x] Add `IP.BIN` generation instructions to main `readme.md` (currently only in `misc/dreamcast/readme.txt`)
+- [x] Document `classicube.zip` requirement and minimum contents
+- [x] Makefile checks for `IP.BIN` and `classicube.zip` before ISO build
 - [x] Expand testing notes (`misc/dreamcast/TESTING.md`)
 - [ ] Keep `minimal-kos` Docker image in sync with KOS API changes (e.g. `PVR_RAM_SIZE` non-constant note in graphics code)
 

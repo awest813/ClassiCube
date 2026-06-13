@@ -657,7 +657,7 @@ void Gfx_ClearColor(PackedCol color) {
 }
 
 static void SetColorWrite(cc_bool r, cc_bool g, cc_bool b, cc_bool a) {
-	// TODO: Doesn't work
+	/* PVR2 has no per-channel colour write mask; depth-only passes use Gfx_DepthOnlyRendering */
 }
 
 void Gfx_SetDepthWrite(cc_bool enabled) { 
@@ -1120,7 +1120,10 @@ void Gfx_SetViewport(int x, int y, int w, int h) {
 	mat_vp[1][1] = scaleY;
 	mat_vp[3][0] = offsetX;
 	mat_vp[3][1] = offsetY;
-	// TODO load matrix now?
+
+	mat_load(&mat_vp);
+	mat_apply(&_proj);
+	mat_apply(&_view);
 }
 
 void Gfx_SetScissor(int x, int y, int w, int h) {

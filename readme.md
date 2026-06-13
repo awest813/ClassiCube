@@ -324,6 +324,12 @@ Run `make xbox`. You'll need [nxdk](https://github.com/XboxDev/nxdk)
 
 Run `make dreamcast`. You'll need [KallistiOS](https://github.com/KallistiOS/KallistiOS)
 
+Additional setup (see also `misc/dreamcast/readme.txt`):
+- `IP.BIN` in the repo root — generate with [makeip](https://github.com/Dreamcast-Projects/makeip): `makeip misc/dreamcast/ip.txt IP.BIN -l misc/dreamcast/boot_logo.png` (a prebuilt copy is in `misc/dreamcast/`)
+- `misc/dreamcast/classicube.zip` — default texture pack bundled into the disc image
+
+Port status: unfinished but usable. See `misc/dreamcast/PLAN.md` and `misc/dreamcast/TESTING.md` for the roadmap and test checklist.
+
 #### Saturn
 
 Run `make saturn`. You'll need [libyaul](https://github.com/yaul-org/libyaul)

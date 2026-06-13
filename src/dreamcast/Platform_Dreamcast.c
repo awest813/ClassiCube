@@ -426,6 +426,14 @@ cc_result Directory_Enum(const cc_string* dirPath, void* obj, Directory_EnumCall
 	return err;
 }
 
+static cc_bool IsOptionsFile(const cc_string* path) {
+	int idx = String_LastIndexOf(path, '/');
+	if (idx < 0) return false;
+
+	cc_string name = String_UNSAFE_SubstringAt(path, idx + 1);
+	return String_CaselessEqualsConst(&name, "options.txt");
+}
+
 static cc_result File_Do(cc_file* file, const char* path, int mode) {
 	// CD filesystem loader doesn't usually set errno
 	//  when it can't find the requested file
@@ -439,7 +447,7 @@ static cc_result File_Do(cc_file* file, const char* path, int mode) {
 
 	// Read/Write VMU for options.txt if no SD card, since that file is critical
 	cc_string raw = String_FromReadonly(path);
-	if (err && String_CaselessEqualsConst(&raw, "/cd/options.txt")) {
+	if (err && !usingSD && IsOptionsFile(&raw)) {
 		return VMUFile_Do(file, mode);
 	}
 	return err;
@@ -471,8 +479,11 @@ cc_result File_Close(cc_file file) {
 	if (file == vmu_write_FD) 
 		return VMUFile_Close(file);
 	
-	// Defer SD sync until shutdown or explicit flush
-	if (usingSD) MarkSDDirty();
+	// Sync written files immediately; directory ops are deferred to Platform_Free
+	if (usingSD) {
+		MarkSDDirty();
+		SyncSDCard();
+	}
 
 	int res = fs_close(file);
 	return res == -1 ? errno : 0;
@@ -745,14 +756,14 @@ static void InitModem(void) {
 	Platform_LogConst("Initialising modem..");
 	
 	if (!modem_init()) {
-		Platform_LogConst("Modem initing failed"); return;
+		Platform_LogConst("Modem init failed - continuing offline"); return;
 	}
 	ppp_init();
 	
 	Platform_LogConst("Dialling modem.. (can take ~20 seconds)");
 	err = ppp_modem_init("111111111111", 1, NULL);
 	if (err) {
-		Platform_Log1("Establishing link failed (%i)", &err); return;
+		Platform_Log1("Modem link failed (%i) - continuing offline", &err); return;
 	}
 
 	ppp_set_login("dream", "dreamcast");
@@ -760,8 +771,27 @@ static void InitModem(void) {
 	Platform_LogConst("Connecting link.. (can take ~20 seconds)");
 	err = ppp_connect();
 	if (err) {
-		Platform_Log1("Connecting link failed (%i)", &err); return;
+		Platform_Log1("PPP connect failed (%i) - continuing offline", &err); return;
  	}
+	Platform_LogConst("Modem connected");
+}
+
+static void WaitToStart(void) {
+	Platform_LogConst("Press START to continue (or wait 3 seconds)..");
+
+	for (int i = 0; i < 30; i++)
+	{
+		for (int p = 0; p < 4; p++)
+		{
+			maple_device_t* cont = maple_enum_type(p, MAPLE_FUNC_CONTROLLER);
+			cont_state_t* state;
+			if (!cont) continue;
+
+			state = (cont_state_t*)maple_dev_status(cont);
+			if (state && (state->buttons & CONT_START)) return;
+		}
+		Thread_Sleep(100);
+	}
 }
 
 void Platform_Init(void) {
@@ -777,9 +807,7 @@ void Platform_Init(void) {
 	if (net_default_dev) return;
 	// in case Broadband Adapter isn't active
 	InitModem();
-	// give some time for messages to stay on-screen
-	Platform_LogConst("Starting in 5 seconds..");
-	Thread_Sleep(5000);
+	WaitToStart();
 }
 void Platform_Free(void) {
 	SyncSDCard();

@@ -63,6 +63,8 @@ $(TARGET)-scr.bin: $(TARGET).bin
 	$(KOS_BASE)/utils/scramble/scramble $(TARGET).bin $(TARGET)-scr.bin
 	
 $(TARGET).iso: $(TARGET)-scr.bin
+	@test -f misc/dreamcast/classicube.zip || (echo "Missing misc/dreamcast/classicube.zip - copy a default texture pack there" && exit 1)
+	@test -f misc/dreamcast/IP.BIN || (echo "Missing misc/dreamcast/IP.BIN - see misc/dreamcast/readme.txt" && exit 1)
 	mkdir -p ISO_FILES
 	cp $(TARGET)-scr.bin ISO_FILES/1ST_READ.BIN
 	mkdir -p ISO_FILES/audio

@@ -153,7 +153,11 @@ cc_result StreamContext_Play(struct AudioContext* ctx) {
 }
 
 cc_result StreamContext_Pause(struct AudioContext* ctx) {
-	return ERR_NOT_SUPPORTED;
+	if (!ctx->count || ctx->hnd < 0 || ctx->hnd >= SND_STREAM_MAX) return 0;
+
+	snd_stream_stop(ctx->hnd);
+	valid_handles[ctx->hnd] = HANDLE_STATE_ALLOCATED;
+	return 0;
 }
 
 cc_result StreamContext_Update(struct AudioContext* ctx, int* inUse) {

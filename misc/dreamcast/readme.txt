@@ -13,3 +13,9 @@ For more details about IP.bin, see https://mc.pp.se/dc/ip.bin.html
 See also:
 - PLAN.md    — port roadmap and known issues
 - TESTING.md — manual test checklist for emulator and hardware
+
+Direct connect screen options (persisted in options.txt):
+- launcher-dc-username
+- launcher-dc-ip
+- launcher-dc-port
+- launcher-dc-mppass (stored securely)

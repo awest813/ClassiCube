@@ -288,6 +288,26 @@ static void HandleController(int port, bool dual_analog, cont_state_t* state, fl
 	}
 }
 
+static void DisconnectMaplePort(int maplePort) {
+	long id = 0xDC + maplePort;
+
+	for (int i = 0; i < INPUT_MAX_GAMEPADS; i++)
+	{
+		struct GamepadDevice* dev = &Gamepad_Devices[i];
+		if (dev->deviceID != id) continue;
+
+		for (int btn = 0; btn < GAMEPAD_BTN_COUNT; btn++)
+		{
+			if (dev->pressed[btn])
+				Gamepad_SetButton(i, btn + GAMEPAD_BEG_BTN, 0);
+		}
+		dev->axisX[0] = 0; dev->axisY[0] = 0;
+		dev->axisX[1] = 0; dev->axisY[1] = 0;
+		dev->deviceID   = 0;
+		return;
+	}
+}
+
 void Gamepads_Process(float delta) {
 	maple_device_t* cont;
 	cont_state_t*  state;
@@ -295,9 +315,9 @@ void Gamepads_Process(float delta) {
 	for (int i = 0; i < 4; i++)
 	{
 		cont  = maple_enum_type(i, MAPLE_FUNC_CONTROLLER);
-		if (!cont)  continue;
+		if (!cont)  { DisconnectMaplePort(i); continue; }
 		state = (cont_state_t*)maple_dev_status(cont);
-		if (!state) continue;
+		if (!state) { DisconnectMaplePort(i); continue; }
 
 		int dual_analog = cont_has_capabilities(cont, CONT_CAPABILITIES_DUAL_ANALOG);
 		if(dual_analog == -1) dual_analog = 0;

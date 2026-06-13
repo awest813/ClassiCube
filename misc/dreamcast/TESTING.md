@@ -54,7 +54,10 @@ Verify these specifically after code changes:
 4. **VirtualDialog** — `Window_ShowDialog` shows dismissible on-screen message
 5. **Framebuffer flip** — Launcher/menu UI has reduced tearing (`vid_flip` after 2D draw)
 6. **SD sync batching** — Saves persist after clean exit; no excessive SD wear during rapid file ops
-7. **Audio poll** — Music + SFX concurrently without glitches; no audio thread races
+7. **Audio poll** — Music + SFX concurrently without glitches; pause/resume music if applicable
+8. **Split-screen** — 2/3/4 player viewports render in correct screen regions
+9. **Gamepad hot-unplug** — Disconnecting a controller clears stuck inputs
+10. **Boot UX** — Press START to skip post-modem wait; offline boot works without network
 
 ## Known Limitations (not test failures)
 

@@ -20,6 +20,16 @@ CI reference: `.github/workflows/build_dreamcast.yml` (`ghcr.io/classicube/minim
 
 ## Emulator (Flycast)
 
+### Serial / debug output
+
+In Flycast, enable SH4 serial output to see `Platform_Log` messages (modem status, SD init, crashes):
+- Options → Advanced → enable serial output / connect to stdout
+- Or launch from terminal with serial redirected
+
+On real hardware, use a Dreamcast serial cable or coders cable with `dc-tool -x` / dcload.
+
+### Test matrix
+
 | Test | Steps | Pass criteria |
 |------|-------|---------------|
 | Boot | Load `ClassiCube-dc.cdi` or `.elf` via dcload | Reaches launcher menu |

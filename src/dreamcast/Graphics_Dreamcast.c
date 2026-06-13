@@ -173,7 +173,7 @@ struct GPUTexture {
 	uint32_t size:  24; // Size in bytes
 };
 
-#define MAX_TEXTURE_COUNT 768
+#define MAX_TEXTURE_COUNT 512
 static struct GPUTexture tex_list[MAX_TEXTURE_COUNT];
 static struct GPUTexture* tex_active;
 
@@ -939,8 +939,26 @@ static Vertex* ReserveOutput(struct CommandsList* list, cc_uint32 elems) {
 static void DrawQuads(int count, void* src, DrawHints hints) {
 	if (!count) return;
 	struct CommandsList* list = ActivePolyList();
-
+	cc_bool noclip = (hints & DRAW_HINT_NOCLIP) || gfx_rendering2D;
 	cc_uint32 header_required = (list->length == 0) || stateDirty;
+
+	if (gfx_format == VERTEX_FORMAT_TEXTURED && list == direct && noclip) {
+		struct pvr_poly_hdr_t hdr;
+
+		if (header_required) {
+			BuildPolyContext(&hdr, list->list_type);
+			SubmitCommands((Vertex*)&hdr, 1);
+			stateDirty = false;
+		}
+		if (list->length) {
+			SubmitCommands((Vertex*)list->data, list->length);
+			list->length = 0;
+		}
+
+		DrawTexturedQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
+		return;
+	}
+
 	// Reserve room for the vertices and header
 	Vertex* beg = ReserveOutput(list, list->length + (header_required) + count);
 	if (!beg) return;
@@ -952,18 +970,8 @@ static void DrawQuads(int count, void* src, DrawHints hints) {
 		beg++;
 	}
 	Vertex* end;
-	cc_bool noclip = (hints & DRAW_HINT_NOCLIP) || gfx_rendering2D;
 
 	if (gfx_format == VERTEX_FORMAT_TEXTURED) {
-		// Super fast path draws directly to SQ
-		if (list == direct && noclip) {
-			if (list->length) SubmitCommands((Vertex*)list->data, list->length);
-			list->length = 0;
-
-			DrawTexturedQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
-			return;
-		}
-
 		end = noclip ? DrawTexturedQuads_Fast(src, beg, count >> 2) 
 					 : DrawTexturedQuads_Clip(src, beg, count >> 2);
 	} else {
@@ -1082,6 +1090,12 @@ static void FinishList(void) {
 
 void Gfx_BeginFrame(void) {
 	ApplyBgColor();
+	listOP.length = 0;
+	listTR.length = 0;
+	listPT.length = 0;
+	gfx_scissor   = false;
+	stateDirty    = true;
+
 	pvr_scene_begin();
 	// Directly render PT list, buffer other lists first
 	BeginList(PVR_LIST_PT_POLY);

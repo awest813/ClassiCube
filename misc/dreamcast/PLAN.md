@@ -174,6 +174,7 @@ The backend is a full custom implementation (~1100 lines) with:
 
 - [x] Fix clear color (`ApplyBgColor` each frame)
 - [ ] Fix color write mask (menu backgrounds, underwater tint, damage flash)
+- [x] Audit alpha test direct path — poly header always submitted before fast-path draws
 - [ ] Audit alpha test / punch-through list usage (UI text, block crack overlays, vegetation)
 - [ ] Profile VRAM usage on large worlds; tune `MAX_TEXTURE_COUNT`, `TEXMEM_RESERVED`, `Gfx.MaxTexSize`
 - [x] Cap texture block table to compile-time VRAM limit; use `PVR_RAM_SIZE` when provided by KOS

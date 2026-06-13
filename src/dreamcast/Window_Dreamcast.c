@@ -163,23 +163,27 @@ static void ProcessKeyboardInput(void) {
 	maple_device_t* kb_dev;
 	kbd_state_t* state;
 
-	kb_dev = maple_enum_type(0, MAPLE_FUNC_KEYBOARD);
-	if (!kb_dev) return;
-	state  = (kbd_state_t*)maple_dev_status(kb_dev);
-	if (!state)  return;
+	for (int p = 0; p < 4; p++)
+	{
+		kb_dev = maple_enum_type(p, MAPLE_FUNC_KEYBOARD);
+		if (!kb_dev) continue;
+		state  = (kbd_state_t*)maple_dev_status(kb_dev);
+		if (!state)  continue;
 	
-	if (has_prevState) UpdateKeyboardState(state);
-	has_prevState  = true;
-	prev_modifiers = state->last_modifiers;
+		if (has_prevState) UpdateKeyboardState(state);
+		has_prevState  = true;
+		prev_modifiers = state->last_modifiers;
 	
-	Input.Sources |= INPUT_SOURCE_NORMAL;
-	int ret = kbd_queue_pop(kb_dev, 1);
-	if (ret < 0) return;
+		Input.Sources |= INPUT_SOURCE_NORMAL;
+		int ret = kbd_queue_pop(kb_dev, 1);
+		if (ret < 0) return;
         
-	// Ascii printable characters
-	//  NOTE: Escape, Enter etc map to ASCII control characters
-	if (ret >= ' ' && ret <= 0x7F)
-		Event_RaiseInt(&InputEvents.Press, ret);
+		// Ascii printable characters
+		//  NOTE: Escape, Enter etc map to ASCII control characters
+		if (ret >= ' ' && ret <= 0x7F)
+			Event_RaiseInt(&InputEvents.Press, ret);
+		return;
+	}
 }
 
 

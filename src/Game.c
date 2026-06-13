@@ -165,9 +165,18 @@ static void CycleViewDistanceBackwards(const short* viewDists, int count) {
 
 static const short normalDists[]  = { 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096 };
 static const short classicDists[] = { 8, 32, 128, 512 };
+#if defined CC_BUILD_DREAMCAST
+static const short consoleDists[] = { 8, 16, 24, 32, 48, 64, 96, 128 };
+#endif
+
 void Game_CycleViewDistance(void) {
-	const short* dists = Gui.ClassicMenu ? classicDists : normalDists;
+#if defined CC_BUILD_DREAMCAST
+	const short* dists  = Gui.ClassicMenu ? classicDists : consoleDists;
+	int count = Gui.ClassicMenu ? Array_Elems(classicDists) : Array_Elems(consoleDists);
+#else
+	const short* dists  = Gui.ClassicMenu ? classicDists : normalDists;
 	int count = Gui.ClassicMenu ? Array_Elems(classicDists) : Array_Elems(normalDists);
+#endif
 
 	if (Input_IsShiftPressed()) {
 		CycleViewDistanceBackwards(dists, count);

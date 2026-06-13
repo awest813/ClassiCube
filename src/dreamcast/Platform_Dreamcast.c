@@ -802,6 +802,7 @@ void Platform_Init(void) {
 	// W5500 net adapter also uses the serial port
 	if (w5500_adapter_init(NULL, true) == 0) {
 		log_debugger = false;
+		Platform_LogConst("Broadband adapter detected");
 	} else {
 		TryInitSDCard();
 	}

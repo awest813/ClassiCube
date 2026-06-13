@@ -131,11 +131,12 @@ Issues explicitly marked in `src/dreamcast/`:
 
 - [ ] **Needs substantially more testing** (music + simultaneous sound effects)
 - [x] `AudioBackend_Tick` thread-safety — `snd_stream_poll` moved to `Audio_Poll`
-- [ ] Sound looping workaround in `AudioCallback` (zero-sample edge case) — verify on hardware
+- [x] Sound looping / empty-buffer edge case in `AudioCallback` — skip exhausted buffers instead of null-sample hack
 
 ### Window / input (`Window_Dreamcast.c`)
 
-- [x] `Gamepads_Process` uses `return` when a port has no controller — fixed to `continue`
+- [x] Keyboard state tracked per maple port (no bleed when scanning all ports)
+- [x] Mouse scanned on all maple ports (not only port 0)
 - [ ] Analog axis deadzone / scale (`AXIS_SCALE`, threshold 8) — verify on hardware and dual-analog sticks
 - [x] `Window_DrawFramebuffer` — uses `vid_flip` after 2D draw for tear-free UI
 - [x] `Window_ShowDialog` — uses `VirtualDialog_Show`
@@ -176,9 +177,8 @@ The backend is a full custom implementation (~1100 lines) with:
 - [ ] Fix color write mask (menu backgrounds, underwater tint, damage flash)
 - [x] Audit alpha test direct path — poly header always submitted before fast-path draws
 - [ ] Audit alpha test / punch-through list usage (UI text, block crack overlays, vegetation)
-- [ ] Profile VRAM usage on large worlds; tune `MAX_TEXTURE_COUNT`, `TEXMEM_RESERVED`, `Gfx.MaxTexSize`
-- [x] Cap texture block table to compile-time VRAM limit; use `PVR_RAM_SIZE` when provided by KOS
-- [x] Validate scissor (`Gfx_SetScissor`) — PT list clips submitted immediately to TA
+- [x] Profile VRAM usage on large worlds — default view distance 64, cycle capped at 128, MAX_TEXTURE_COUNT 512
+- [x] Validate scissor (`Gfx_SetScissor`) — PT list clips submitted immediately; full-screen clip resets TA on disable
 - [x] Review fog table updates vs `gfx_fogEnabled` toggles
 - [x] Confirm texture upload flush requirements after `Gfx_UpdateTexture`
 - [ ] Real-hardware comparison with Flycast for Z-fighting, sorting, and translucent water
@@ -273,8 +273,8 @@ gantt
 | Stack | 64 KiB per thread (`CC_BUILD_MAXSTACK`) |
 | VRAM | 8 MB PVR2; texture cap `512×512` per texture, block allocator with defrag |
 | TA vertex buffer | `32 * 50000` bytes configured in `InitGPU` |
-| View distance | Auto-halving via `Game_ReduceVRAM()` down to minimum 16 |
-| Textures | Max 768 GPU textures; 4bpp palette limited to 16 colors per texture |
+| View distance | Default 64; cycle options 8–128; auto-halves on VRAM OOM down to 16 |
+| Textures | Max 512 GPU textures; 4bpp palette limited to 16 colors per texture |
 
 ---
 

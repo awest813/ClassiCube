@@ -67,8 +67,10 @@ Verify these specifically after code changes:
 7. **Audio poll** — Music + SFX concurrently without glitches; pause/resume music if applicable
 8. **Split-screen** — 2/3/4 player viewports render in correct screen regions
 9. **Gamepad hot-unplug** — Disconnecting a controller clears stuck inputs
-11. **Scissor / split-screen** — Viewport regions clip geometry correctly (inventory, split-screen)
+10. **Keyboard / mouse ports** — Keyboard on any maple port; mouse not limited to port A
+11. **Scissor / split-screen** — Viewport regions clip geometry correctly; scissor disable restores full-screen
 12. **VSync** — Frame pacing stable when vsync enabled in options
+13. **Audio empty buffers** — Looping sounds and rapid SFX do not stall the snd_stream callback
 
 ## Known Limitations (not test failures)
 

@@ -77,7 +77,7 @@ void Window_RequestClose(void) {
 /*########################################################################################################################*
 *----------------------------------------------------Input processing-----------------------------------------------------*
 *#########################################################################################################################*/
-static cc_bool has_prevState;
+static cc_bool has_prevState[4];
 
 static int MapKey(int k) {
 	if (k >= KBD_KEY_A  && k <= KBD_KEY_Z)   return 'A'      + (k - KBD_KEY_A);
@@ -131,12 +131,12 @@ static int MapKey(int k) {
 }
 
 #define ToggleKey(diff, cur, mask, btn) if (diff & mask) Input_Set(btn, cur & mask)
-static kbd_mods_t prev_modifiers;
-static key_state_t prev_states[KBD_MAX_KEYS];
+static kbd_mods_t prev_modifiers[4];
+static key_state_t prev_states[4][KBD_MAX_KEYS];
 
-static void UpdateKeyboardState(kbd_state_t* state) {
+static void UpdateKeyboardState(int port, kbd_state_t* state) {
 	int cur_keys  = state->last_modifiers.raw;
-	int diff_keys = prev_modifiers.raw ^ state->last_modifiers.raw;
+	int diff_keys = prev_modifiers[port].raw ^ state->last_modifiers.raw;
 	
 	if (diff_keys) {
 		ToggleKey(diff_keys, cur_keys, KBD_MOD_LALT,   CCKEY_LALT);
@@ -151,32 +151,40 @@ static void UpdateKeyboardState(kbd_state_t* state) {
 	for (int i = KBD_KEY_A; i < KBD_KEY_S3; i++)
 	{
 		key_state_t key = state->key_states[i];
-		if (key.is_down == prev_states[i].is_down) continue;
+		if (key.is_down == prev_states[port][i].is_down) continue;
 
 		int btn = MapKey(i);
 		if (btn) Input_Set(btn, key.is_down);
 	}
-	Mem_Copy(prev_states, state->key_states, sizeof(prev_states));
+	Mem_Copy(prev_states[port], state->key_states, sizeof(prev_states[port]));
+	prev_modifiers[port] = state->last_modifiers;
 }
 
 static void ProcessKeyboardInput(void) {
 	maple_device_t* kb_dev;
 	kbd_state_t* state;
+	cc_bool found = false;
+
+	for (int p = 0; p < 4; p++)
+	{
+		kb_dev = maple_enum_type(p, MAPLE_FUNC_KEYBOARD);
+		if (!kb_dev) { has_prevState[p] = false; continue; }
+		state  = (kbd_state_t*)maple_dev_status(kb_dev);
+		if (!state)  { has_prevState[p] = false; continue; }
+
+		if (has_prevState[p]) UpdateKeyboardState(p, state);
+		has_prevState[p] = true;
+		found = true;
+	}
+	if (found) Input.Sources |= INPUT_SOURCE_NORMAL;
 
 	for (int p = 0; p < 4; p++)
 	{
 		kb_dev = maple_enum_type(p, MAPLE_FUNC_KEYBOARD);
 		if (!kb_dev) continue;
-		state  = (kbd_state_t*)maple_dev_status(kb_dev);
-		if (!state)  continue;
-	
-		if (has_prevState) UpdateKeyboardState(state);
-		has_prevState  = true;
-		prev_modifiers = state->last_modifiers;
-	
-		Input.Sources |= INPUT_SOURCE_NORMAL;
+
 		int ret = kbd_queue_pop(kb_dev, 1);
-		if (ret < 0) return;
+		if (ret < 0) continue;
         
 		// Ascii printable characters
 		//  NOTE: Escape, Enter etc map to ASCII control characters
@@ -194,18 +202,22 @@ static void ProcessMouseInput(float delta) {
 	maple_device_t* mouse;
 	mouse_state_t*  state;
 
-	mouse = maple_enum_type(0, MAPLE_FUNC_MOUSE);
-	if (!mouse) return;
-	state = (mouse_state_t*)maple_dev_status(mouse);
-	if (!state) return;
-	
-	int mods = state->buttons;
-	Input_SetNonRepeatable(CCMOUSE_L, mods & MOUSE_LEFTBUTTON);
-	Input_SetNonRepeatable(CCMOUSE_R, mods & MOUSE_RIGHTBUTTON);
-	Input_SetNonRepeatable(CCMOUSE_M, mods & MOUSE_SIDEBUTTON);
-	Mouse_ScrollVWheel(-state->dz * 0.5f);
+	for (int p = 0; p < 4; p++)
+	{
+		mouse = maple_enum_type(p, MAPLE_FUNC_MOUSE);
+		if (!mouse) continue;
+		state = (mouse_state_t*)maple_dev_status(mouse);
+		if (!state) continue;
 
-	VirtualCursor_Update(state->dx, state->dy, delta);
+		int mods = state->buttons;
+		Input_SetNonRepeatable(CCMOUSE_L, mods & MOUSE_LEFTBUTTON);
+		Input_SetNonRepeatable(CCMOUSE_R, mods & MOUSE_RIGHTBUTTON);
+		Input_SetNonRepeatable(CCMOUSE_M, mods & MOUSE_SIDEBUTTON);
+		Mouse_ScrollVWheel(-state->dz * 0.5f);
+
+		VirtualCursor_Update(state->dx, state->dy, delta);
+		return;
+	}
 }
 
 void Window_ProcessEvents(float delta) {

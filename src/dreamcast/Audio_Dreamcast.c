@@ -37,22 +37,42 @@ void AudioBackend_Free(void) {
 
 static void* AudioCallback(snd_stream_hnd_t hnd, int smp_req, int *smp_recv) {
 	struct AudioContext* ctx = snd_stream_get_userdata(hnd);
-	struct AudioBuffer* buf  = &ctx->bufs[ctx->bufHead];
-	
-	int samples = min(buf->bytesLeft, smp_req);
-	*smp_recv   = samples;
-	void* ptr   = buf->samples;
-	
+	struct AudioBuffer* buf;
+	int samples, tried = 0;
+
+	if (!ctx->count) {
+		*smp_recv = 0;
+		return NULL;
+	}
+
+	/* Skip exhausted buffers (e.g. after a one-shot sound or between loop chunks) */
+	while (tried < ctx->count) {
+		buf = &ctx->bufs[ctx->bufHead];
+		if (buf->bytesLeft > 0) break;
+
+		buf->samples   = NULL;
+		buf->available = true;
+		ctx->bufHead   = (ctx->bufHead + 1) % ctx->count;
+		tried++;
+	}
+
+	if (tried >= ctx->count) {
+		*smp_recv = 0;
+		return NULL;
+	}
+
+	buf      = &ctx->bufs[ctx->bufHead];
+	samples  = min(buf->bytesLeft, smp_req);
+	*smp_recv = samples;
+	void* ptr = buf->samples;
+
 	buf->samples   += samples;
 	buf->bytesLeft -= samples;
-	
+
 	if (buf->bytesLeft == 0) {
 		ctx->bufHead   = (ctx->bufHead + 1) % ctx->count;
 		buf->samples   = NULL;
 		buf->available = true;
-
-		// special case to fix sounds looping
-		if (samples == 0 && ptr == NULL) *smp_recv = smp_req;
 	}
 	return ptr;
 }

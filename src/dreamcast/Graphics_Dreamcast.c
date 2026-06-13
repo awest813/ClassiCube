@@ -1147,12 +1147,7 @@ void Gfx_SetViewport(int x, int y, int w, int h) {
 	mat_apply(&_view);
 }
 
-void Gfx_SetScissor(int x, int y, int w, int h) {
-	cc_bool active    = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
-	gfx_scissor = active;
-	stateDirty  = true;
-	if (!active) return;
-
+static void SubmitScissorCommand(int x, int y, int w, int h) {
 	struct pvr_clip_command {
 		uint32_t cmd; // TA command
 		uint32_t mode1, mode2, mode3; // not used in USERCLIP command
@@ -1171,5 +1166,19 @@ void Gfx_SetScissor(int x, int y, int w, int h) {
 	CommandsList_Append(&listTR, &c);
 	/* PT list is submitted directly to the TA throughout the frame */
 	SubmitCommands((Vertex*)&c, 1);
+}
+
+void Gfx_SetScissor(int x, int y, int w, int h) {
+	cc_bool active    = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
+	gfx_scissor = active;
+	stateDirty  = true;
+
+	if (!active) {
+		/* Reset TA clip state when returning to full-screen rendering */
+		SubmitScissorCommand(0, 0, Game.Width, Game.Height);
+		return;
+	}
+
+	SubmitScissorCommand(x, y, w, h);
 }
 

@@ -644,9 +644,13 @@ cc_result Socket_Create(cc_socket* s, cc_sockaddr* addr) {
 }
 
 cc_result Socket_SetNonBlocking(cc_socket s, cc_bool nonblocking) {
-	// TODO need to preserve old flags?
-	int mode = nonblocking ? O_NONBLOCK : 0;
-	int res  = fcntl(s, F_SETFL, mode);
+	int res = fcntl(s, F_GETFL, 0);
+	if (res == -1) return errno;
+
+	int flags = res & ~O_NONBLOCK;
+	if (nonblocking) flags |= O_NONBLOCK;
+
+	res = fcntl(s, F_SETFL, flags);
 	return res == -1 ? errno : 0;
 }
 

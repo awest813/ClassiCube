@@ -293,9 +293,9 @@ void Gamepads_Process(float delta) {
 	for (int i = 0; i < 4; i++)
 	{
 		cont  = maple_enum_type(i, MAPLE_FUNC_CONTROLLER);
-		if (!cont)  return;
+		if (!cont)  continue;
 		state = (cont_state_t*)maple_dev_status(cont);
-		if (!state) return;
+		if (!state) continue;
 
 		int dual_analog = cont_has_capabilities(cont, CONT_CAPABILITIES_DUAL_ANALOG);
 		if(dual_analog == -1) dual_analog = 0;

@@ -633,6 +633,13 @@ static CC_NOINLINE void BuildPolyContext(pvr_poly_hdr_t* dst, int list_type) {
 *#########################################################################################################################*/
 static PackedCol gfx_clearColor;
 
+static void ApplyBgColor(void) {
+	float r = PackedCol_R(gfx_clearColor) / 255.0f;
+	float g = PackedCol_G(gfx_clearColor) / 255.0f;
+	float b = PackedCol_B(gfx_clearColor) / 255.0f;
+	pvr_set_bg_color(r, g, b);
+}
+
 void Gfx_SetFaceCulling(cc_bool enabled) { 
 	gfx_culling = enabled;
 	stateDirty  = true;
@@ -646,11 +653,7 @@ void Gfx_SetAlphaArgBlend(cc_bool enabled) { }
 void Gfx_ClearColor(PackedCol color) {
 	if (color == gfx_clearColor) return;
 	gfx_clearColor = color;
-	
-	float r = PackedCol_R(color) / 255.0f;
-	float g = PackedCol_G(color) / 255.0f;
-	float b = PackedCol_B(color) / 255.0f;
-	pvr_set_bg_color(r, g, b); // TODO: not working ?
+	ApplyBgColor();
 }
 
 static void SetColorWrite(cc_bool r, cc_bool g, cc_bool b, cc_bool a) {
@@ -1058,8 +1061,7 @@ void Gfx_SetVSync(cc_bool vsync) {
 }
 
 void Gfx_ClearBuffers(GfxBuffers buffers) {
-	// TODO clear only some buffers
-	// no need to use glClear
+	if (buffers & GFX_BUFFER_COLOR) ApplyBgColor();
 }
 
 static pvr_dr_state_t dr_state;
@@ -1074,6 +1076,7 @@ static void FinishList(void) {
 }
 
 void Gfx_BeginFrame(void) {
+	ApplyBgColor();
 	pvr_scene_begin();
 	// Directly render PT list, buffer other lists first
 	BeginList(PVR_LIST_PT_POLY);

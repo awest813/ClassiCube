@@ -13,8 +13,9 @@ Expected outputs: `ClassiCube-dc.elf`, `ClassiCube-dc.iso`, `ClassiCube-dc.cdi`
 
 Prerequisites:
 - KallistiOS toolchain with `environ.sh` sourced
-- `IP.BIN` in repo root (see `misc/dreamcast/readme.txt`)
+- `misc/dreamcast/IP.BIN` — generate with `makeip` (see `misc/dreamcast/readme.txt`)
 - `misc/dreamcast/classicube.zip` default texture pack
+- Optional: `misc/dreamcast/audio.zip` — bundled into disc as `audio/default.zip` and `audio/classicube.zip`
 
 CI reference: `.github/workflows/build_dreamcast.yml` (`ghcr.io/classicube/minimal-kos:latest`)
 
@@ -39,7 +40,7 @@ On real hardware, use a Dreamcast serial cable or coders cable with `dc-tool -x`
 | Multi-controller | Map 2+ virtual controllers to ports A-D | All connected pads respond (see gamepad fix) |
 | Error dialog | Trigger connection failure | On-screen dialog appears (not just serial log) |
 | Audio | Enable sounds + music | Both play; no hang or divide-by-zero |
-| Screenshot | Press screenshot bind (X + inventory) | PNG written without crash |
+| Screenshot | Rebind in controls if needed | Default unbound (X is inventory) |
 
 ## Real Hardware
 
@@ -68,14 +69,16 @@ Verify these specifically after code changes:
 8. **Split-screen** — 2/3/4 player viewports render in correct screen regions
 9. **Gamepad hot-unplug** — Disconnecting a controller clears stuck inputs
 10. **Keyboard / mouse ports** — Keyboard on any maple port; mouse not limited to port A
-11. **Scissor / split-screen** — Viewport regions clip geometry correctly; scissor disable restores full-screen
-12. **VSync** — Frame pacing stable when vsync enabled in options
-13. **Audio empty buffers** — Looping sounds and rapid SFX do not stall the snd_stream callback
+11. **BBA + SD** — Broadband adapter and SD card both work; saves land on `/sd/ClassiCube/`
+12. **SD boot skip** — SD-only boot skips ~40 s modem dial
+13. **Scissor / split-screen** — Viewport regions clip geometry correctly; scissor disable restores full-screen
+14. **VSync** — Frame pacing stable when vsync enabled in options
+15. **Audio empty buffers** — Looping sounds and rapid SFX do not stall the snd_stream callback
+16. **VMU any slot** — Options load/save on VMU in any maple port/slot
 
 ## Known Limitations (not test failures)
 
 - `SetColorWrite` not implemented on PVR2 (same as several console backends)
-- `StreamContext_Pause` unsupported
 - No native file picker
 - Read-only when booting from CD without SD
 - Modem init can block boot ~40 seconds when no BBA

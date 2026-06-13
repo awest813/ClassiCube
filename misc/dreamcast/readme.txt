@@ -2,7 +2,11 @@ The dreamcast build requires an initial bootstrap program (Initial Program) name
 
 To generate a custom IP.bin, compile https://github.com/Dreamcast-Projects/makeip
 
-Then run: makeip ip.txt IP.BIN -l boot_logo.png
+Then run: makeip misc/dreamcast/ip.txt misc/dreamcast/IP.BIN -l misc/dreamcast/boot_logo.png
+
+Optional disc assets (not committed — copy before `make dreamcast`):
+- misc/dreamcast/classicube.zip  → texpacks/default.zip on disc
+- misc/dreamcast/audio.zip        → audio/default.zip and audio/classicube.zip on disc
 
 ---
 

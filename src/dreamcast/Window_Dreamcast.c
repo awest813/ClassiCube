@@ -164,6 +164,7 @@ static void ProcessKeyboardInput(void) {
 	maple_device_t* kb_dev;
 	kbd_state_t* state;
 	cc_bool found = false;
+	int primary = -1;
 
 	for (int p = 0; p < 4; p++)
 	{
@@ -171,6 +172,10 @@ static void ProcessKeyboardInput(void) {
 		if (!kb_dev) { has_prevState[p] = false; continue; }
 		state  = (kbd_state_t*)maple_dev_status(kb_dev);
 		if (!state)  { has_prevState[p] = false; continue; }
+
+		if (primary < 0) primary = p;
+		/* Only one keyboard drives global key state (multi-keyboard setups are rare) */
+		if (p != primary) continue;
 
 		if (has_prevState[p]) UpdateKeyboardState(p, state);
 		has_prevState[p] = true;
@@ -252,11 +257,18 @@ static const BindMapping defaults_dc[BIND_COUNT] = {
 	[BIND_FLY_DOWN]     = { CCPAD_2, CCPAD_DOWN },
 	[BIND_HOTBAR_LEFT]  = { CCPAD_2, CCPAD_LEFT }, 
 	[BIND_HOTBAR_RIGHT] = { CCPAD_2, CCPAD_RIGHT },
-	[BIND_SCREENSHOT]   = { CCPAD_3 },
+	[BIND_SCREENSHOT]   = { 0, 0 },
 };
 
 void Gamepads_PreInit(void) { }
-void Gamepads_Init(void)    { }
+void Gamepads_Init(void) {
+	Input_DisplayNames[CCPAD_1] = "A";
+	Input_DisplayNames[CCPAD_2] = "B";
+	Input_DisplayNames[CCPAD_3] = "X";
+	Input_DisplayNames[CCPAD_4] = "Y";
+	Input_DisplayNames[CCPAD_L] = "L";
+	Input_DisplayNames[CCPAD_R] = "R";
+}
 
 static void HandleButtons(int port, int mods) {
 	Gamepad_SetButton(port, CCPAD_1, mods & CONT_A);
@@ -274,7 +286,6 @@ static void HandleButtons(int port, int mods) {
 	
 	// Buttons not on standard controller
 	Gamepad_SetButton(port, CCPAD_6,       mods & CONT_C);
-	Gamepad_SetButton(port, CCPAD_7,       mods & CONT_D);
 	Gamepad_SetButton(port, CCPAD_5,       mods & CONT_Z);
 	Gamepad_SetButton(port, CCPAD_CLEFT,   mods & CONT_DPAD2_LEFT);
 	Gamepad_SetButton(port, CCPAD_CRIGHT,  mods & CONT_DPAD2_RIGHT);

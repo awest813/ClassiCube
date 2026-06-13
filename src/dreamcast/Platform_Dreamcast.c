@@ -20,6 +20,8 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include <time.h>
+#include <stdio.h>
+#include <sys/stat.h>
 #include <ppp/ppp.h>
 #include <kos.h>
 #include <dc/sd.h>
@@ -187,41 +189,45 @@ static cc_string GetThreadName(void) {
 
 static void HandleCrash(irq_t evt, irq_context_t* ctx, void* data) {
 	uint32_t code = evt;
+	cc_bool logged = false;
 	log_timestamp = false;
 	window_inited = false;
 	str_offset    = 0;
 
 	for (;;)
 	{
-		cc_string name = GetThreadName();
-		Platform_LogConst("** CLASSICUBE FATALLY CRASHED **");
-		Platform_Log3("PC: %h, error: %h, thd: %s",
-						&ctx->pc, &code, &name);
-		Platform_LogConst("");
-	
-		static const char* const regNames[] = {
-			"R0 ", "R1 ", "R2 ", "R3 ", "R4 ", "R5 ", "R6 ", "R7 ",
-			"R8 ", "R9 ", "R10", "R11", "R12", "R13", "R14", "R15"
-		};
-	
-		for (int i = 0; i < 8; i++) {
-			Platform_Log4("    %c: %h    %c: %h",
-						regNames[i],     &ctx->r[i],
-						regNames[i + 8], &ctx->r[i + 8]);
-		}
-	
-		Platform_Log4("    %c : %h    %c : %h",
-					"SR", &ctx->sr,
-					"PR", &ctx->pr);
-	
-		Platform_LogConst("");
-		Platform_LogConst("Please report on ClassiCube Discord or forums");
-		Platform_LogConst("");
-		Platform_LogConst("You will need to restart your Dreamcast");
-		Platform_LogConst("");
+		if (!logged) {
+			cc_string name = GetThreadName();
+			Platform_LogConst("** CLASSICUBE FATALLY CRASHED **");
+			Platform_Log3("PC: %h, error: %h, thd: %s",
+							&ctx->pc, &code, &name);
+			Platform_LogConst("");
 		
-		// Only log to serial/emu console first time
-		log_debugger = false;
+			static const char* const regNames[] = {
+				"R0 ", "R1 ", "R2 ", "R3 ", "R4 ", "R5 ", "R6 ", "R7 ",
+				"R8 ", "R9 ", "R10", "R11", "R12", "R13", "R14", "R15"
+			};
+		
+			for (int i = 0; i < 8; i++) {
+				Platform_Log4("    %c: %h    %c: %h",
+							regNames[i],     &ctx->r[i],
+							regNames[i + 8], &ctx->r[i + 8]);
+			}
+		
+			Platform_Log4("    %c : %h    %c : %h",
+						"SR", &ctx->sr,
+						"PR", &ctx->pr);
+		
+			Platform_LogConst("");
+			Platform_LogConst("Please report on ClassiCube Discord or forums");
+			Platform_LogConst("");
+			Platform_LogConst("You will need to restart your Dreamcast");
+			Platform_LogConst("");
+
+			logged = true;
+			log_debugger = false;
+		}
+		thd_sleep(1000);
 	}
 }
 
@@ -277,13 +283,48 @@ static const cc_uint8 icon_data[] = {
 };
 
 static volatile int vmu_write_FD = -10000;
+static char vmu_options_path[24];
+static cc_bool vmu_path_inited;
+
+static void VMU_SelectOptionsPath(void) {
+	const char port_ids[] = { 'a', 'b', 'c', 'd' };
+	struct stat sb;
+
+	if (vmu_path_inited) return;
+	vmu_path_inited = true;
+
+	for (int p = 0; p < 4; p++)
+	{
+		if (!maple_enum_type(p, MAPLE_FUNC_MEMCARD)) continue;
+
+		for (int s = 1; s <= 2; s++)
+		{
+			snprintf(vmu_options_path, sizeof(vmu_options_path),
+				"/vmu/%c%d/CCOPT.txt", port_ids[p], s);
+			if (fs_stat(vmu_options_path, &sb, 0) == 0) return;
+		}
+	}
+
+	for (int p = 0; p < 4; p++)
+	{
+		if (!maple_enum_type(p, MAPLE_FUNC_MEMCARD)) continue;
+
+		snprintf(vmu_options_path, sizeof(vmu_options_path),
+			"/vmu/%c1/CCOPT.txt", port_ids[p]);
+		return;
+	}
+
+	strcpy(vmu_options_path, "/vmu/a1/CCOPT.txt");
+}
+
 static int VMUFile_Do(cc_file* file, int mode) {
 	void* data = NULL;
 	int fd, err = -1, len;
 	vmu_pkg_t pkg;
-	
+
+	VMU_SelectOptionsPath();
 	errno = 0;
-	fd    = fs_open("/vmu/a1/CCOPT.txt", O_RDONLY | O_META);
+	fd    = fs_open(vmu_options_path, O_RDONLY | O_META);
 	
 	// Try to extract stored data from the VMU
 	if (fd >= 0) {
@@ -342,13 +383,15 @@ static cc_result VMUFile_Close(cc_file file) {
 	
 	// Copy into VMU file
 	errno = 0;
-	fd    = fs_open("/vmu/a1/CCOPT.txt", O_RDWR | O_CREAT | O_TRUNC | O_META);
+	fd    = fs_open(vmu_options_path, O_RDWR | O_CREAT | O_TRUNC | O_META);
 	if (fd < 0) return errno;
 	
-	fs_write(fd, pkg_data, pkg_len);
+	int wrote = fs_write(fd, pkg_data, pkg_len);
 	fs_close(fd);
 	free(pkg_data);
 	Mem_Free(data);
+	if (wrote != pkg_len) return errno ? errno : ERR_INVALID_ARGUMENT;
+
 	Platform_Log1("VMU options saved (%i bytes)", &pkg_len);
 	return 0;
 }
@@ -482,10 +525,7 @@ cc_result File_Close(cc_file file) {
 		return VMUFile_Close(file);
 	
 	// Sync written files immediately; directory ops are deferred to Platform_Free
-	if (usingSD) {
-		MarkSDDirty();
-		SyncSDCard();
-	}
+	if (usingSD) MarkSDDirty();
 
 	int res = fs_close(file);
 	return res == -1 ? errno : 0;
@@ -527,9 +567,13 @@ static void* ExecThread(void* param) {
 
 void Thread_Run(void** handle, Thread_StartFunc func, int stackSize, const char* name) {
 	kthread_attr_t attrs = { 0 };
-	attrs.stack_size     = stackSize;
-	attrs.label          = name;
-	*handle = thd_create_ex(&attrs, ExecThread, func);
+	kthread_t* thread;
+
+	attrs.stack_size = stackSize;
+	attrs.label      = name;
+	thread = thd_create_ex(&attrs, ExecThread, func);
+	if (!thread) Process_Abort2(errno, "Creating thread");
+	*handle = thread;
 }
 
 void Thread_Detach(void* handle) {
@@ -803,11 +847,15 @@ void Platform_Init(void) {
 	if (w5500_adapter_init(NULL, true) == 0) {
 		log_debugger = false;
 		Platform_LogConst("Broadband adapter detected");
-	} else {
-		TryInitSDCard();
 	}
-	
+	TryInitSDCard();
+
 	if (net_default_dev) return;
+	if (usingSD) {
+		Platform_LogConst("SD card ready - skipping modem init");
+		WaitToStart();
+		return;
+	}
 	// in case Broadband Adapter isn't active
 	InitModem();
 	WaitToStart();
@@ -861,5 +909,13 @@ static cc_result GetMachineID(cc_uint32* key) {
 }
 
 cc_result Platform_GetEntropy(void* data, int len) {
-	return ERR_NOT_SUPPORTED;
+	cc_uint8* dst = (cc_uint8*)data;
+	cc_uint32 seed  = (cc_uint32)timer_us_gettime64();
+	seed ^= (cc_uint32)rtc_boot_time();
+
+	for (int i = 0; i < len; i++) {
+		if ((i & 3) == 0) seed = seed * 1664525u + 1013904223u;
+		dst[i] = (cc_uint8)(seed >> ((i & 3) * 8));
+	}
+	return 0;
 }

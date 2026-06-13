@@ -137,16 +137,24 @@ Issues explicitly marked in `src/dreamcast/`:
 
 - [x] Keyboard state tracked per maple port (no bleed when scanning all ports)
 - [x] Mouse scanned on all maple ports (not only port 0)
+- [x] Only lowest-port keyboard drives global key state
+- [x] Gamepad button display names (A/B/X/Y, L/R) in controls UI
+- [x] Screenshot bind unbound (was conflicting with inventory on X)
+- [x] `CONT_D` no longer double-mapped to SELECT and CCPAD_7
 - [ ] Analog axis deadzone / scale (`AXIS_SCALE`, threshold 8) — verify on hardware and dual-analog sticks
 - [x] `Window_DrawFramebuffer` — uses `vid_flip` after 2D draw for tear-free UI
 - [x] `Window_ShowDialog` — uses `VirtualDialog_Show`
 
 ### Platform (`Platform_Dreamcast.c`)
 
-- [x] SD sync: batched via `MarkSDDirty` / `SyncSDCard` on `Platform_Free`
+- [x] SD sync: batched via `MarkSDDirty` / `SyncSDCard` on `Platform_Free` (not per `File_Close`)
+- [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
+- [x] Skip modem dial when SD card is mounted (offline play from SD)
+- [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)
+- [x] VMU save checks `fs_write` result
 - [x] `Directory_Enum` — `.` / `..` filtered (defensive, same as other ports)
 - [x] `Socket_SetNonBlocking` — preserves flags via `F_GETFL` / `F_SETFL`
-- [ ] Modem init blocks boot ~40 s with on-screen text — consider async init or skip when BBA present
+- [ ] Modem init blocks boot ~40 s with on-screen text — skipped when SD present; async init still TODO
 
 ---
 
@@ -157,7 +165,7 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] Fix `Gamepads_Process` early `return` → `continue` for empty maple ports
 - [x] Fix `Socket_SetNonBlocking` to preserve existing `fcntl` flags
 - [ ] Exercise crash handler on device (unhandled exception → register dump on screen + serial)
-- [ ] Test VMU-only path: no SD card, options load/save through `/vmu/a1/CCOPT.txt`
+- [ ] Test VMU-only path: no SD card, options load/save through VMU (any slot)
 - [ ] Test read-only CD root (`/cd/`) vs read-write SD root (`/sd/ClassiCube/`)
 - [ ] Multiplayer smoke test: direct connect UI (`launcher-dc-*` options), join/leave, reconnect
 - [ ] Verify `Game_ReduceVRAM()` path when TA runs out of vertex memory (halves view distance at ≤16 stop)
@@ -205,7 +213,7 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Batch SD writes (defer `fs_fat_sync` to `Platform_Free`)
 - [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
 - [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
-- [ ] W5500 adapter path: confirm coexistence with SD (serial port contention is noted in `Platform_Init`)
+- [ ] W5500 adapter path: confirm coexistence with SD (serial port contention noted; init order fixed)
 - [ ] Optional: ship a minimal default `classicube.zip` or build step to fetch it
 
 ### 5. Input & split-screen (P2–P3)
@@ -261,7 +269,7 @@ gantt
   TA buffer tuning           :e2, 8, 10
 ```
 
-**Recommended first PR:** gamepad loop + socket `fcntl` fix + clear-color investigation — small, testable, high impact.
+**Next focus:** hardware validation per `TESTING.md`; optional `misc/dreamcast/audio.zip` for CD sound bundling.
 
 ---
 

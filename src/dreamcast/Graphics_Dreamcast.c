@@ -173,12 +173,15 @@ struct GPUTexture {
 	uint32_t size:  24; // Size in bytes
 };
 
-#define MAX_TEXTURE_COUNT 768
+#define MAX_TEXTURE_COUNT 512
 static struct GPUTexture tex_list[MAX_TEXTURE_COUNT];
 static struct GPUTexture* tex_active;
 
+#if defined(PVR_RAM_SIZE)
+#define _PVR_RAM_SIZE PVR_RAM_SIZE
+#else
 #define _PVR_RAM_SIZE (8 * 1024 * 1024)
-/* PVR_RAM_SIZE is no longer constant in KOS master (devkit/naomi has 16 MB VRAM) */
+#endif
 
 // For PVR2 GPU, highly recommended that multiple textures don't cross the same 2048 byte VRAM page alignment
 // So to avoid this, ensure that each texture is allocated at the start of a 2048 byte VRAM page
@@ -206,6 +209,7 @@ static void InitTexMemory(void) {
     void* base    = pvr_mem_malloc(tmem_avail);
     texmem_base   = (void*)TEXMEM_BLOCK_ROUNDUP((cc_uintptr)base);
 	texmem_blocks = tmem_avail / TEXMEM_BLOCK_SIZE;
+	if (texmem_blocks > TEXMEM_MAX_BLOCKS) texmem_blocks = TEXMEM_MAX_BLOCKS;
 }
 
 static int DefragTexMemory(void) {
@@ -500,6 +504,7 @@ GfxResourceID Gfx_AllocTexture(struct Bitmap* bmp, int rowWidth, cc_uint8 flags,
 
 void Gfx_UpdateTexture(GfxResourceID texId, int originX, int originY, struct Bitmap* part, int rowWidth, cc_bool mipmaps) {
 	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	if (tex->format != PVR_TXRFMT_ARGB4444) return;
 	
 	int width = part->width, height = part->height;
 	unsigned maskX, maskY;
@@ -525,7 +530,7 @@ void Gfx_UpdateTexture(GfxResourceID texId, int originX, int originY, struct Bit
 		}
 		Y = (Y - maskY) & maskY;
 	}
-	// TODO: Do we need to flush VRAM?
+	/* PVR texture RAM from pvr_mem_malloc does not need a CPU cache flush */
 }
 
 void Gfx_BindTexture(GfxResourceID texId) {
@@ -633,6 +638,13 @@ static CC_NOINLINE void BuildPolyContext(pvr_poly_hdr_t* dst, int list_type) {
 *#########################################################################################################################*/
 static PackedCol gfx_clearColor;
 
+static void ApplyBgColor(void) {
+	float r = PackedCol_R(gfx_clearColor) / 255.0f;
+	float g = PackedCol_G(gfx_clearColor) / 255.0f;
+	float b = PackedCol_B(gfx_clearColor) / 255.0f;
+	pvr_set_bg_color(r, g, b);
+}
+
 void Gfx_SetFaceCulling(cc_bool enabled) { 
 	gfx_culling = enabled;
 	stateDirty  = true;
@@ -646,15 +658,11 @@ void Gfx_SetAlphaArgBlend(cc_bool enabled) { }
 void Gfx_ClearColor(PackedCol color) {
 	if (color == gfx_clearColor) return;
 	gfx_clearColor = color;
-	
-	float r = PackedCol_R(color) / 255.0f;
-	float g = PackedCol_G(color) / 255.0f;
-	float b = PackedCol_B(color) / 255.0f;
-	pvr_set_bg_color(r, g, b); // TODO: not working ?
+	ApplyBgColor();
 }
 
 static void SetColorWrite(cc_bool r, cc_bool g, cc_bool b, cc_bool a) {
-	// TODO: Doesn't work
+	/* PVR2 has no per-channel colour write mask; depth-only passes use Gfx_DepthOnlyRendering */
 }
 
 void Gfx_SetDepthWrite(cc_bool enabled) { 
@@ -763,6 +771,7 @@ void Gfx_SetFog(cc_bool enabled) {
 	
 	gfx_fogEnabled = enabled;
 	stateDirty     = true;
+	if (enabled && gfx_fogMode >= 0) UpdateFog();
 }
 
 void Gfx_SetFogCol(PackedCol color) {
@@ -931,8 +940,26 @@ static Vertex* ReserveOutput(struct CommandsList* list, cc_uint32 elems) {
 static void DrawQuads(int count, void* src, DrawHints hints) {
 	if (!count) return;
 	struct CommandsList* list = ActivePolyList();
-
+	cc_bool noclip = (hints & DRAW_HINT_NOCLIP) || gfx_rendering2D;
 	cc_uint32 header_required = (list->length == 0) || stateDirty;
+
+	if (gfx_format == VERTEX_FORMAT_TEXTURED && list == direct && noclip) {
+		struct pvr_poly_hdr_t hdr;
+
+		if (header_required) {
+			BuildPolyContext(&hdr, list->list_type);
+			SubmitCommands((Vertex*)&hdr, 1);
+			stateDirty = false;
+		}
+		if (list->length) {
+			SubmitCommands((Vertex*)list->data, list->length);
+			list->length = 0;
+		}
+
+		DrawTexturedQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
+		return;
+	}
+
 	// Reserve room for the vertices and header
 	Vertex* beg = ReserveOutput(list, list->length + (header_required) + count);
 	if (!beg) return;
@@ -944,18 +971,8 @@ static void DrawQuads(int count, void* src, DrawHints hints) {
 		beg++;
 	}
 	Vertex* end;
-	cc_bool noclip = (hints & DRAW_HINT_NOCLIP) || gfx_rendering2D;
 
 	if (gfx_format == VERTEX_FORMAT_TEXTURED) {
-		// Super fast path draws directly to SQ
-		if (list == direct && noclip) {
-			if (list->length) SubmitCommands((Vertex*)list->data, list->length);
-			list->length = 0;
-
-			DrawTexturedQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
-			return;
-		}
-
 		end = noclip ? DrawTexturedQuads_Fast(src, beg, count >> 2) 
 					 : DrawTexturedQuads_Clip(src, beg, count >> 2);
 	} else {
@@ -977,9 +994,52 @@ void Gfx_SetVertexFormat(VertexFormat fmt) {
 	stateDirty = true;
 }
 
+static void LineToQuad(struct VertexColoured* a, struct VertexColoured* b,
+		struct VertexColoured* out, float thickness) {
+	float dx = b->x - a->x, dy = b->y - a->y, dz = b->z - a->z;
+	float px, py, pz, len;
+
+	/* Perpendicular in XZ plane (sufficient for axis-aligned selection edges) */
+	px = -dz; py = 0.0f; pz = dx;
+	len = Math_SqrtF(px * px + pz * pz);
+	if (len < 0.001f) {
+		px = thickness; py = 0.0f; pz = 0.0f;
+	} else {
+		px = px / len * thickness;
+		pz = pz / len * thickness;
+		py = 0.0f;
+	}
+
+	out[0] = *a; out[0].x += px; out[0].z += pz;
+	out[1] = *a; out[1].x -= px; out[1].z -= pz;
+	out[2] = *b; out[2].x -= px; out[2].z -= pz;
+	out[3] = *b; out[3].x += px; out[3].z += pz;
+}
+
 void Gfx_DrawVb_Lines(int verticesCount) {
-	//SetupVertices(0);
-	//glDrawArrays(GL_LINES, 0, verticesCount);
+	struct VertexColoured* src, *tmp;
+	int lineCount, quadVerts;
+	VertexFormat prevFmt;
+	const float thickness = 1.0f / 32.0f;
+
+	if (!verticesCount || renderingDisabled) return;
+	lineCount  = verticesCount >> 1;
+	quadVerts  = lineCount << 2;
+	if (!lineCount) return;
+
+	src = (struct VertexColoured*)gfx_vertices;
+	tmp = (struct VertexColoured*)Mem_Alloc(quadVerts, SIZEOF_VERTEX_COLOURED, "line quads");
+	if (!tmp) return;
+
+	for (int i = 0; i < lineCount; i++) {
+		LineToQuad(&src[i * 2], &src[i * 2 + 1], &tmp[i * 4], thickness);
+	}
+
+	prevFmt = gfx_format;
+	Gfx_SetVertexFormat(VERTEX_FORMAT_COLOURED);
+	DrawQuads(quadVerts, tmp, 0);
+	Gfx_SetVertexFormat(prevFmt);
+	Mem_Free(tmp);
 }
 
 void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints hints) {
@@ -1058,8 +1118,7 @@ void Gfx_SetVSync(cc_bool vsync) {
 }
 
 void Gfx_ClearBuffers(GfxBuffers buffers) {
-	// TODO clear only some buffers
-	// no need to use glClear
+	if (buffers & GFX_BUFFER_COLOR) ApplyBgColor();
 }
 
 static pvr_dr_state_t dr_state;
@@ -1074,6 +1133,13 @@ static void FinishList(void) {
 }
 
 void Gfx_BeginFrame(void) {
+	ApplyBgColor();
+	listOP.length = 0;
+	listTR.length = 0;
+	listPT.length = 0;
+	gfx_scissor   = false;
+	stateDirty    = true;
+
 	pvr_scene_begin();
 	// Directly render PT list, buffer other lists first
 	BeginList(PVR_LIST_PT_POLY);
@@ -1100,6 +1166,8 @@ void Gfx_EndFrame(void) {
 	SubmitList(&listTR);
 	pvr_scene_finish();
 	pvr_wait_ready();
+
+	if (gfx_vsync) vid_waitvbl();
 }
 
 void Gfx_OnWindowResize(void) {
@@ -1117,13 +1185,13 @@ void Gfx_SetViewport(int x, int y, int w, int h) {
 	mat_vp[1][1] = scaleY;
 	mat_vp[3][0] = offsetX;
 	mat_vp[3][1] = offsetY;
-	// TODO load matrix now?
+
+	mat_load(&mat_vp);
+	mat_apply(&_proj);
+	mat_apply(&_view);
 }
 
-void Gfx_SetScissor(int x, int y, int w, int h) {
-	gfx_scissor = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
-	stateDirty  = true;
-
+static void SubmitScissorCommand(int x, int y, int w, int h) {
 	struct pvr_clip_command {
 		uint32_t cmd; // TA command
 		uint32_t mode1, mode2, mode3; // not used in USERCLIP command
@@ -1139,7 +1207,22 @@ void Gfx_SetScissor(int x, int y, int w, int h) {
 	c.ey = ((y + h) >> 5) - 1;
 
 	CommandsList_Append(&listOP, &c);
-	CommandsList_Append(&listPT, &c);
 	CommandsList_Append(&listTR, &c);
+	/* PT list is submitted directly to the TA throughout the frame */
+	SubmitCommands((Vertex*)&c, 1);
+}
+
+void Gfx_SetScissor(int x, int y, int w, int h) {
+	cc_bool active    = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
+	gfx_scissor = active;
+	stateDirty  = true;
+
+	if (!active) {
+		/* Reset TA clip state when returning to full-screen rendering */
+		SubmitScissorCommand(0, 0, Game.Width, Game.Height);
+		return;
+	}
+
+	SubmitScissorCommand(x, y, w, h);
 }
 

@@ -1,7 +1,7 @@
 #include <kos.h>
 #include "../Audio.h"
 
-/* TODO needs way more testing, especially with sounds */
+/* Needs more testing on real hardware with concurrent music and sound effects */
 #define HANDLE_STATE_UNUSED    0
 #define HANDLE_STATE_ALLOCATED 1
 #define HANDLE_STATE_PLAYABLE  2
@@ -29,13 +29,7 @@ cc_bool AudioBackend_Init(void) {
 	return snd_stream_init() == 0;
 }
 
-void AudioBackend_Tick(void) {
-	// TODO is this really threadsafe with music? should this be done in Audio_Poll instead?
-	for (int i = 0; i < SND_STREAM_MAX; i++)
-	{
-		if (valid_handles[i] == HANDLE_STATE_PLAYABLE) snd_stream_poll(i);
-	}
-}
+void AudioBackend_Tick(void) { }
 
 void AudioBackend_Free(void) {
 	snd_stream_shutdown();
@@ -43,22 +37,42 @@ void AudioBackend_Free(void) {
 
 static void* AudioCallback(snd_stream_hnd_t hnd, int smp_req, int *smp_recv) {
 	struct AudioContext* ctx = snd_stream_get_userdata(hnd);
-	struct AudioBuffer* buf  = &ctx->bufs[ctx->bufHead];
-	
-	int samples = min(buf->bytesLeft, smp_req);
-	*smp_recv   = samples;
-	void* ptr   = buf->samples;
-	
+	struct AudioBuffer* buf;
+	int samples, tried = 0;
+
+	if (!ctx->count) {
+		*smp_recv = 0;
+		return NULL;
+	}
+
+	/* Skip exhausted buffers (e.g. after a one-shot sound or between loop chunks) */
+	while (tried < ctx->count) {
+		buf = &ctx->bufs[ctx->bufHead];
+		if (buf->bytesLeft > 0) break;
+
+		buf->samples   = NULL;
+		buf->available = true;
+		ctx->bufHead   = (ctx->bufHead + 1) % ctx->count;
+		tried++;
+	}
+
+	if (tried >= ctx->count) {
+		*smp_recv = 0;
+		return NULL;
+	}
+
+	buf      = &ctx->bufs[ctx->bufHead];
+	samples  = min(buf->bytesLeft, smp_req);
+	*smp_recv = samples;
+	void* ptr = buf->samples;
+
 	buf->samples   += samples;
 	buf->bytesLeft -= samples;
-	
+
 	if (buf->bytesLeft == 0) {
 		ctx->bufHead   = (ctx->bufHead + 1) % ctx->count;
 		buf->samples   = NULL;
 		buf->available = true;
-
-		// special case to fix sounds looping
-		if (samples == 0 && ptr == NULL) *smp_recv = smp_req;
 	}
 	return ptr;
 }
@@ -128,6 +142,10 @@ cc_result Audio_Poll(struct AudioContext* ctx, int* inUse) {
 	struct AudioBuffer* buf;
 	int count = 0;
 
+	if (ctx->count && ctx->hnd >= 0 && ctx->hnd < SND_STREAM_MAX &&
+		valid_handles[ctx->hnd] == HANDLE_STATE_PLAYABLE)
+		snd_stream_poll(ctx->hnd);
+
 	for (int i = 0; i < ctx->count; i++)
 	{
 		buf = &ctx->bufs[i];
@@ -155,7 +173,11 @@ cc_result StreamContext_Play(struct AudioContext* ctx) {
 }
 
 cc_result StreamContext_Pause(struct AudioContext* ctx) {
-	return ERR_NOT_SUPPORTED;
+	if (!ctx->count || ctx->hnd < 0 || ctx->hnd >= SND_STREAM_MAX) return 0;
+
+	snd_stream_stop(ctx->hnd);
+	valid_handles[ctx->hnd] = HANDLE_STATE_ALLOCATED;
+	return 0;
 }
 
 cc_result StreamContext_Update(struct AudioContext* ctx, int* inUse) {

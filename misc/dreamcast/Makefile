@@ -42,8 +42,12 @@ LIBS		= -lm -lppp -lkosfat
 #---------------------------------------------------------------------------------
 default: $(BUILD_DIR) $(TARGET).cdi
 
+assets:
+	bash misc/dreamcast/fetch-assets.sh
+
 clean:
-	rm $(TARGET).cdi $(TARGET).iso $(TARGET).elf $(TARGET)-scr.bin $(TARGET).bin $(OBJS)
+	rm -f $(TARGET).cdi $(TARGET).iso $(TARGET).elf $(TARGET)-scr.bin $(TARGET).bin $(OBJS) $(DEPFILES) IP.BIN
+	rm -rf ISO_FILES
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -63,6 +67,8 @@ $(TARGET)-scr.bin: $(TARGET).bin
 	$(KOS_BASE)/utils/scramble/scramble $(TARGET).bin $(TARGET)-scr.bin
 	
 $(TARGET).iso: $(TARGET)-scr.bin
+	@test -f misc/dreamcast/classicube.zip || (echo "Missing misc/dreamcast/classicube.zip - copy a default texture pack there" && exit 1)
+	@test -f misc/dreamcast/IP.BIN || (echo "Missing misc/dreamcast/IP.BIN - see misc/dreamcast/readme.txt" && exit 1)
 	mkdir -p ISO_FILES
 	cp $(TARGET)-scr.bin ISO_FILES/1ST_READ.BIN
 	mkdir -p ISO_FILES/audio
@@ -70,6 +76,12 @@ $(TARGET).iso: $(TARGET)-scr.bin
 	mkdir -p ISO_FILES/texpacks
 	mkdir -p ISO_FILES/texturecache
 	cp misc/dreamcast/classicube.zip ISO_FILES/texpacks/default.zip
+	@if [ -f misc/dreamcast/audio.zip ]; then \
+		cp misc/dreamcast/audio.zip ISO_FILES/audio/default.zip; \
+		cp misc/dreamcast/audio.zip ISO_FILES/audio/classicube.zip; \
+	else \
+		echo "Note: misc/dreamcast/audio.zip not found - CD boots without bundled sounds"; \
+	fi
 	cp misc/dreamcast/IP.BIN IP.BIN
 	mkisofs -G IP.BIN -C 0,11702 -J -l -r -quiet -o $(TARGET).iso ISO_FILES
 # genisoimage -V ClassiCube -G IP.BIN -joliet -rock -l -o $(TARGET).iso ISO_FILES
@@ -88,7 +100,7 @@ $(BUILD_DIR)/%.o: src/dreamcast/%.c
 	kos-cc $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: third_party/bearssl/%.c
-	kos-cc $(CFLAGS) -c $< -o $@
+	kos-cc $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: src/dreamcast/%.S
 	kos-cc $(DEPFLAGS) -c $< -o $@

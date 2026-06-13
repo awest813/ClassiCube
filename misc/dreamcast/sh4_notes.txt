@@ -29,3 +29,18 @@ SH4 C ABI:
 - FR4  to FR11 are input arguments (can be overwritten)
 - FR12 to FR13 are non-volatile (must be restored at end)
 
+
+=========================================================
+======================== PVR TEXTURE TWIDDLE ==============
+=========================================================
+Dreamcast PVR textures use twiddled (Morton order) layout in VRAM.
+ClassiCube uploads ARGB4444 and 4bpp paletted textures via TwiddleCalcFactors
+in Graphics_Dreamcast.c. Other console ports (Xbox, PS3, PSVita) share similar
+twiddle logic but use different axis ordering (Dreamcast is XY, Xbox is YX).
+
+See also: Graphics_Dreamcast.c Gfx_SetScissor — the PT (punch-through) polygon
+list is submitted directly to the TA, so USERCLIP commands must be submitted
+immediately rather than buffered in listPT.
+
+Gfx_DrawVb_Lines expands line pairs to thin quads — PVR2 has no native line primitives.
+

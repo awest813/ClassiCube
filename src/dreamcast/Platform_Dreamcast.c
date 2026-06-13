@@ -20,6 +20,8 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include <time.h>
+#include <stdio.h>
+#include <sys/stat.h>
 #include <ppp/ppp.h>
 #include <kos.h>
 #include <dc/sd.h>
@@ -38,6 +40,18 @@ const cc_result ReturnCode_SocketInProgess  = EINPROGRESS;
 const cc_result ReturnCode_SocketWouldBlock = EWOULDBLOCK;
 const cc_result ReturnCode_SocketDropped    = EPIPE;
 static cc_bool usingSD;
+static cc_bool sd_fs_dirty;
+
+static void MarkSDDirty(void) {
+	if (usingSD) sd_fs_dirty = true;
+}
+
+static void SyncSDCard(void) {
+	if (!usingSD || !sd_fs_dirty) return;
+
+	fs_fat_sync("/sd");
+	sd_fs_dirty = false;
+}
 
 const char* Platform_AppNameSuffix = " Dreamcast";
 cc_bool Platform_ReadonlyFilesystem;
@@ -175,41 +189,45 @@ static cc_string GetThreadName(void) {
 
 static void HandleCrash(irq_t evt, irq_context_t* ctx, void* data) {
 	uint32_t code = evt;
+	cc_bool logged = false;
 	log_timestamp = false;
 	window_inited = false;
 	str_offset    = 0;
 
 	for (;;)
 	{
-		cc_string name = GetThreadName();
-		Platform_LogConst("** CLASSICUBE FATALLY CRASHED **");
-		Platform_Log3("PC: %h, error: %h, thd: %s",
-						&ctx->pc, &code, &name);
-		Platform_LogConst("");
-	
-		static const char* const regNames[] = {
-			"R0 ", "R1 ", "R2 ", "R3 ", "R4 ", "R5 ", "R6 ", "R7 ",
-			"R8 ", "R9 ", "R10", "R11", "R12", "R13", "R14", "R15"
-		};
-	
-		for (int i = 0; i < 8; i++) {
-			Platform_Log4("    %c: %h    %c: %h",
-						regNames[i],     &ctx->r[i],
-						regNames[i + 8], &ctx->r[i + 8]);
-		}
-	
-		Platform_Log4("    %c : %h    %c : %h",
-					"SR", &ctx->sr,
-					"PR", &ctx->pr);
-	
-		Platform_LogConst("");
-		Platform_LogConst("Please report on ClassiCube Discord or forums");
-		Platform_LogConst("");
-		Platform_LogConst("You will need to restart your Dreamcast");
-		Platform_LogConst("");
+		if (!logged) {
+			cc_string name = GetThreadName();
+			Platform_LogConst("** CLASSICUBE FATALLY CRASHED **");
+			Platform_Log3("PC: %h, error: %h, thd: %s",
+							&ctx->pc, &code, &name);
+			Platform_LogConst("");
 		
-		// Only log to serial/emu console first time
-		log_debugger = false;
+			static const char* const regNames[] = {
+				"R0 ", "R1 ", "R2 ", "R3 ", "R4 ", "R5 ", "R6 ", "R7 ",
+				"R8 ", "R9 ", "R10", "R11", "R12", "R13", "R14", "R15"
+			};
+		
+			for (int i = 0; i < 8; i++) {
+				Platform_Log4("    %c: %h    %c: %h",
+							regNames[i],     &ctx->r[i],
+							regNames[i + 8], &ctx->r[i + 8]);
+			}
+		
+			Platform_Log4("    %c : %h    %c : %h",
+						"SR", &ctx->sr,
+						"PR", &ctx->pr);
+		
+			Platform_LogConst("");
+			Platform_LogConst("Please report on ClassiCube Discord or forums");
+			Platform_LogConst("");
+			Platform_LogConst("You will need to restart your Dreamcast");
+			Platform_LogConst("");
+
+			logged = true;
+			log_debugger = false;
+		}
+		thd_sleep(1000);
 	}
 }
 
@@ -265,13 +283,48 @@ static const cc_uint8 icon_data[] = {
 };
 
 static volatile int vmu_write_FD = -10000;
+static char vmu_options_path[24];
+static cc_bool vmu_path_inited;
+
+static void VMU_SelectOptionsPath(void) {
+	const char port_ids[] = { 'a', 'b', 'c', 'd' };
+	struct stat sb;
+
+	if (vmu_path_inited) return;
+	vmu_path_inited = true;
+
+	for (int p = 0; p < 4; p++)
+	{
+		if (!maple_enum_type(p, MAPLE_FUNC_MEMCARD)) continue;
+
+		for (int s = 1; s <= 2; s++)
+		{
+			snprintf(vmu_options_path, sizeof(vmu_options_path),
+				"/vmu/%c%d/CCOPT.txt", port_ids[p], s);
+			if (fs_stat(vmu_options_path, &sb, 0) == 0) return;
+		}
+	}
+
+	for (int p = 0; p < 4; p++)
+	{
+		if (!maple_enum_type(p, MAPLE_FUNC_MEMCARD)) continue;
+
+		snprintf(vmu_options_path, sizeof(vmu_options_path),
+			"/vmu/%c1/CCOPT.txt", port_ids[p]);
+		return;
+	}
+
+	strcpy(vmu_options_path, "/vmu/a1/CCOPT.txt");
+}
+
 static int VMUFile_Do(cc_file* file, int mode) {
 	void* data = NULL;
 	int fd, err = -1, len;
 	vmu_pkg_t pkg;
-	
+
+	VMU_SelectOptionsPath();
 	errno = 0;
-	fd    = fs_open("/vmu/a1/CCOPT.txt", O_RDONLY | O_META);
+	fd    = fs_open(vmu_options_path, O_RDONLY | O_META);
 	
 	// Try to extract stored data from the VMU
 	if (fd >= 0) {
@@ -330,12 +383,16 @@ static cc_result VMUFile_Close(cc_file file) {
 	
 	// Copy into VMU file
 	errno = 0;
-	fd    = fs_open("/vmu/a1/CCOPT.txt", O_RDWR | O_CREAT | O_TRUNC | O_META);
+	fd    = fs_open(vmu_options_path, O_RDWR | O_CREAT | O_TRUNC | O_META);
 	if (fd < 0) return errno;
 	
-	fs_write(fd, pkg_data, pkg_len);
+	int wrote = fs_write(fd, pkg_data, pkg_len);
 	fs_close(fd);
 	free(pkg_data);
+	Mem_Free(data);
+	if (wrote != pkg_len) return errno ? errno : ERR_INVALID_ARGUMENT;
+
+	Platform_Log1("VMU options saved (%i bytes)", &pkg_len);
 	return 0;
 }
 
@@ -367,9 +424,8 @@ cc_result Directory_Create2(const cc_filepath* path) {
 	//  so rather than logging an error, just pretend it already exists
 	if (err == EINVAL) err = EEXIST;
 
-	// Changes are cached in memory, sync to SD card
-	// TODO maybe use fs_shutdown/fs_unmount and only sync once??
-	if (!err) fs_fat_sync("/sd");
+	// Changes are cached in memory, defer sync to Platform_Free
+	if (!err) MarkSDDirty();
 	return err;
 }
 
@@ -397,8 +453,7 @@ cc_result Directory_Enum(const cc_string* dirPath, void* obj, Directory_EnumCall
 		path.length = 0;
 		String_Format1(&path, "%s/", dirPath);
 
-		// ignore . and .. entry (PSP does return them)
-		// TODO: Does Dreamcast?
+		// ignore . and .. entries if returned by the filesystem
 		const char* src = entry->name;
 		if (src[0] == '.' && src[1] == '\0')                  continue;
 		if (src[0] == '.' && src[1] == '.' && src[2] == '\0') continue;
@@ -416,6 +471,14 @@ cc_result Directory_Enum(const cc_string* dirPath, void* obj, Directory_EnumCall
 	return err;
 }
 
+static cc_bool IsOptionsFile(const cc_string* path) {
+	int idx = String_LastIndexOf(path, '/');
+	if (idx < 0) return false;
+
+	cc_string name = String_UNSAFE_SubstringAt(path, idx + 1);
+	return String_CaselessEqualsConst(&name, "options.txt");
+}
+
 static cc_result File_Do(cc_file* file, const char* path, int mode) {
 	// CD filesystem loader doesn't usually set errno
 	//  when it can't find the requested file
@@ -429,7 +492,7 @@ static cc_result File_Do(cc_file* file, const char* path, int mode) {
 
 	// Read/Write VMU for options.txt if no SD card, since that file is critical
 	cc_string raw = String_FromReadonly(path);
-	if (err && String_CaselessEqualsConst(&raw, "/cd/options.txt")) {
+	if (err && !usingSD && IsOptionsFile(&raw)) {
 		return VMUFile_Do(file, mode);
 	}
 	return err;
@@ -461,9 +524,8 @@ cc_result File_Close(cc_file file) {
 	if (file == vmu_write_FD) 
 		return VMUFile_Close(file);
 	
-	// Changes are cached in memory, sync to SD card
-	// TODO maybe use fs_shutdown/fs_unmount and only sync once??
-	if (usingSD) fs_fat_sync("/sd");
+	// Sync written files immediately; directory ops are deferred to Platform_Free
+	if (usingSD) MarkSDDirty();
 
 	int res = fs_close(file);
 	return res == -1 ? errno : 0;
@@ -505,9 +567,13 @@ static void* ExecThread(void* param) {
 
 void Thread_Run(void** handle, Thread_StartFunc func, int stackSize, const char* name) {
 	kthread_attr_t attrs = { 0 };
-	attrs.stack_size     = stackSize;
-	attrs.label          = name;
-	*handle = thd_create_ex(&attrs, ExecThread, func);
+	kthread_t* thread;
+
+	attrs.stack_size = stackSize;
+	attrs.label      = name;
+	thread = thd_create_ex(&attrs, ExecThread, func);
+	if (!thread) Process_Abort2(errno, "Creating thread");
+	*handle = thread;
 }
 
 void Thread_Detach(void* handle) {
@@ -644,9 +710,13 @@ cc_result Socket_Create(cc_socket* s, cc_sockaddr* addr) {
 }
 
 cc_result Socket_SetNonBlocking(cc_socket s, cc_bool nonblocking) {
-	// TODO need to preserve old flags?
-	int mode = nonblocking ? O_NONBLOCK : 0;
-	int res  = fcntl(s, F_SETFL, mode);
+	int res = fcntl(s, F_GETFL, 0);
+	if (res == -1) return errno;
+
+	int flags = res & ~O_NONBLOCK;
+	if (nonblocking) flags |= O_NONBLOCK;
+
+	res = fcntl(s, F_SETFL, flags);
 	return res == -1 ? errno : 0;
 }
 
@@ -732,14 +802,14 @@ static void InitModem(void) {
 	Platform_LogConst("Initialising modem..");
 	
 	if (!modem_init()) {
-		Platform_LogConst("Modem initing failed"); return;
+		Platform_LogConst("Modem init failed - continuing offline"); return;
 	}
 	ppp_init();
 	
 	Platform_LogConst("Dialling modem.. (can take ~20 seconds)");
 	err = ppp_modem_init("111111111111", 1, NULL);
 	if (err) {
-		Platform_Log1("Establishing link failed (%i)", &err); return;
+		Platform_Log1("Modem link failed (%i) - continuing offline", &err); return;
 	}
 
 	ppp_set_login("dream", "dreamcast");
@@ -747,8 +817,32 @@ static void InitModem(void) {
 	Platform_LogConst("Connecting link.. (can take ~20 seconds)");
 	err = ppp_connect();
 	if (err) {
-		Platform_Log1("Connecting link failed (%i)", &err); return;
+		Platform_Log1("PPP connect failed (%i) - continuing offline", &err); return;
  	}
+	Platform_LogConst("Modem connected");
+}
+
+static cc_bool StartHeldOnPorts(void) {
+	for (int p = 0; p < 4; p++)
+	{
+		maple_device_t* cont = maple_enum_type(p, MAPLE_FUNC_CONTROLLER);
+		cont_state_t* state;
+		if (!cont) continue;
+
+		state = (cont_state_t*)maple_dev_status(cont);
+		if (state && (state->buttons & CONT_START)) return true;
+	}
+	return false;
+}
+
+static void WaitToStart(void) {
+	Platform_LogConst("Press START to continue (or wait 3 seconds)..");
+
+	for (int i = 0; i < 30; i++)
+	{
+		if (StartHeldOnPorts()) return;
+		Thread_Sleep(100);
+	}
 }
 
 void Platform_Init(void) {
@@ -757,18 +851,23 @@ void Platform_Init(void) {
 	// W5500 net adapter also uses the serial port
 	if (w5500_adapter_init(NULL, true) == 0) {
 		log_debugger = false;
-	} else {
-		TryInitSDCard();
+		Platform_LogConst("Broadband adapter detected");
 	}
-	
+	TryInitSDCard();
+
 	if (net_default_dev) return;
-	// in case Broadband Adapter isn't active
-	InitModem();
-	// give some time for messages to stay on-screen
-	Platform_LogConst("Starting in 5 seconds..");
-	Thread_Sleep(5000);
+	if (usingSD) {
+		Platform_LogConst("SD card ready - skipping modem init");
+	} else if (StartHeldOnPorts()) {
+		Platform_LogConst("START held - skipping modem init");
+	} else {
+		InitModem();
+	}
+	WaitToStart();
 }
-void Platform_Free(void) { }
+void Platform_Free(void) {
+	SyncSDCard();
+}
 
 cc_bool Platform_DescribeError(cc_result res, cc_string* dst) {
 	char chars[NATIVE_STR_LEN];
@@ -815,5 +914,13 @@ static cc_result GetMachineID(cc_uint32* key) {
 }
 
 cc_result Platform_GetEntropy(void* data, int len) {
-	return ERR_NOT_SUPPORTED;
+	cc_uint8* dst = (cc_uint8*)data;
+	cc_uint32 seed  = (cc_uint32)timer_us_gettime64();
+	seed ^= (cc_uint32)rtc_boot_time();
+
+	for (int i = 0; i < len; i++) {
+		if ((i & 3) == 0) seed = seed * 1664525u + 1013904223u;
+		dst[i] = (cc_uint8)(seed >> ((i & 3) * 8));
+	}
+	return 0;
 }

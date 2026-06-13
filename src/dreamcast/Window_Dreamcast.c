@@ -10,6 +10,7 @@
 #include "../ExtMath.h"
 #include "../Options.h"
 #include "../VirtualKeyboard.h"
+#include "../VirtualDialog.h"
 #include <kos.h>
 
 #include "../VirtualCursor.h"
@@ -76,7 +77,7 @@ void Window_RequestClose(void) {
 /*########################################################################################################################*
 *----------------------------------------------------Input processing-----------------------------------------------------*
 *#########################################################################################################################*/
-static cc_bool has_prevState;
+static cc_bool has_prevState[4];
 
 static int MapKey(int k) {
 	if (k >= KBD_KEY_A  && k <= KBD_KEY_Z)   return 'A'      + (k - KBD_KEY_A);
@@ -130,12 +131,12 @@ static int MapKey(int k) {
 }
 
 #define ToggleKey(diff, cur, mask, btn) if (diff & mask) Input_Set(btn, cur & mask)
-static kbd_mods_t prev_modifiers;
-static key_state_t prev_states[KBD_MAX_KEYS];
+static kbd_mods_t prev_modifiers[4];
+static key_state_t prev_states[4][KBD_MAX_KEYS];
 
-static void UpdateKeyboardState(kbd_state_t* state) {
+static void UpdateKeyboardState(int port, kbd_state_t* state) {
 	int cur_keys  = state->last_modifiers.raw;
-	int diff_keys = prev_modifiers.raw ^ state->last_modifiers.raw;
+	int diff_keys = prev_modifiers[port].raw ^ state->last_modifiers.raw;
 	
 	if (diff_keys) {
 		ToggleKey(diff_keys, cur_keys, KBD_MOD_LALT,   CCKEY_LALT);
@@ -150,35 +151,52 @@ static void UpdateKeyboardState(kbd_state_t* state) {
 	for (int i = KBD_KEY_A; i < KBD_KEY_S3; i++)
 	{
 		key_state_t key = state->key_states[i];
-		if (key.is_down == prev_states[i].is_down) continue;
+		if (key.is_down == prev_states[port][i].is_down) continue;
 
 		int btn = MapKey(i);
 		if (btn) Input_Set(btn, key.is_down);
 	}
-	Mem_Copy(prev_states, state->key_states, sizeof(prev_states));
+	Mem_Copy(prev_states[port], state->key_states, sizeof(prev_states[port]));
+	prev_modifiers[port] = state->last_modifiers;
 }
 
 static void ProcessKeyboardInput(void) {
 	maple_device_t* kb_dev;
 	kbd_state_t* state;
+	cc_bool found = false;
+	int primary = -1;
 
-	kb_dev = maple_enum_type(0, MAPLE_FUNC_KEYBOARD);
-	if (!kb_dev) return;
-	state  = (kbd_state_t*)maple_dev_status(kb_dev);
-	if (!state)  return;
-	
-	if (has_prevState) UpdateKeyboardState(state);
-	has_prevState  = true;
-	prev_modifiers = state->last_modifiers;
-	
-	Input.Sources |= INPUT_SOURCE_NORMAL;
-	int ret = kbd_queue_pop(kb_dev, 1);
-	if (ret < 0) return;
+	for (int p = 0; p < 4; p++)
+	{
+		kb_dev = maple_enum_type(p, MAPLE_FUNC_KEYBOARD);
+		if (!kb_dev) { has_prevState[p] = false; continue; }
+		state  = (kbd_state_t*)maple_dev_status(kb_dev);
+		if (!state)  { has_prevState[p] = false; continue; }
+
+		if (primary < 0) primary = p;
+		/* Only one keyboard drives global key state (multi-keyboard setups are rare) */
+		if (p != primary) continue;
+
+		if (has_prevState[p]) UpdateKeyboardState(p, state);
+		has_prevState[p] = true;
+		found = true;
+	}
+	if (found) Input.Sources |= INPUT_SOURCE_NORMAL;
+
+	for (int p = 0; p < 4; p++)
+	{
+		kb_dev = maple_enum_type(p, MAPLE_FUNC_KEYBOARD);
+		if (!kb_dev) continue;
+
+		int ret = kbd_queue_pop(kb_dev, 1);
+		if (ret < 0) continue;
         
-	// Ascii printable characters
-	//  NOTE: Escape, Enter etc map to ASCII control characters
-	if (ret >= ' ' && ret <= 0x7F)
-		Event_RaiseInt(&InputEvents.Press, ret);
+		// Ascii printable characters
+		//  NOTE: Escape, Enter etc map to ASCII control characters
+		if (ret >= ' ' && ret <= 0x7F)
+			Event_RaiseInt(&InputEvents.Press, ret);
+		return;
+	}
 }
 
 
@@ -189,18 +207,22 @@ static void ProcessMouseInput(float delta) {
 	maple_device_t* mouse;
 	mouse_state_t*  state;
 
-	mouse = maple_enum_type(0, MAPLE_FUNC_MOUSE);
-	if (!mouse) return;
-	state = (mouse_state_t*)maple_dev_status(mouse);
-	if (!state) return;
-	
-	int mods = state->buttons;
-	Input_SetNonRepeatable(CCMOUSE_L, mods & MOUSE_LEFTBUTTON);
-	Input_SetNonRepeatable(CCMOUSE_R, mods & MOUSE_RIGHTBUTTON);
-	Input_SetNonRepeatable(CCMOUSE_M, mods & MOUSE_SIDEBUTTON);
-	Mouse_ScrollVWheel(-state->dz * 0.5f);
+	for (int p = 0; p < 4; p++)
+	{
+		mouse = maple_enum_type(p, MAPLE_FUNC_MOUSE);
+		if (!mouse) continue;
+		state = (mouse_state_t*)maple_dev_status(mouse);
+		if (!state) continue;
 
-	VirtualCursor_Update(state->dx, state->dy, delta);
+		int mods = state->buttons;
+		Input_SetNonRepeatable(CCMOUSE_L, mods & MOUSE_LEFTBUTTON);
+		Input_SetNonRepeatable(CCMOUSE_R, mods & MOUSE_RIGHTBUTTON);
+		Input_SetNonRepeatable(CCMOUSE_M, mods & MOUSE_SIDEBUTTON);
+		Mouse_ScrollVWheel(-state->dz * 0.5f);
+
+		VirtualCursor_Update(state->dx, state->dy, delta);
+		return;
+	}
 }
 
 void Window_ProcessEvents(float delta) {
@@ -235,11 +257,18 @@ static const BindMapping defaults_dc[BIND_COUNT] = {
 	[BIND_FLY_DOWN]     = { CCPAD_2, CCPAD_DOWN },
 	[BIND_HOTBAR_LEFT]  = { CCPAD_2, CCPAD_LEFT }, 
 	[BIND_HOTBAR_RIGHT] = { CCPAD_2, CCPAD_RIGHT },
-	[BIND_SCREENSHOT]   = { CCPAD_3 },
+	[BIND_SCREENSHOT]   = { 0, 0 },
 };
 
 void Gamepads_PreInit(void) { }
-void Gamepads_Init(void)    { }
+void Gamepads_Init(void) {
+	Input_DisplayNames[CCPAD_1] = "A";
+	Input_DisplayNames[CCPAD_2] = "B";
+	Input_DisplayNames[CCPAD_3] = "X";
+	Input_DisplayNames[CCPAD_4] = "Y";
+	Input_DisplayNames[CCPAD_L] = "L";
+	Input_DisplayNames[CCPAD_R] = "R";
+}
 
 static void HandleButtons(int port, int mods) {
 	Gamepad_SetButton(port, CCPAD_1, mods & CONT_A);
@@ -257,7 +286,6 @@ static void HandleButtons(int port, int mods) {
 	
 	// Buttons not on standard controller
 	Gamepad_SetButton(port, CCPAD_6,       mods & CONT_C);
-	Gamepad_SetButton(port, CCPAD_7,       mods & CONT_D);
 	Gamepad_SetButton(port, CCPAD_5,       mods & CONT_Z);
 	Gamepad_SetButton(port, CCPAD_CLEFT,   mods & CONT_DPAD2_LEFT);
 	Gamepad_SetButton(port, CCPAD_CRIGHT,  mods & CONT_DPAD2_RIGHT);
@@ -273,16 +301,37 @@ static void HandleJoystick(int port, int axis, int x, int y, float delta) {
 	Gamepad_SetAxis(port, axis, x / AXIS_SCALE, y / AXIS_SCALE, delta);
 }
 
+#define TRIGGER_THRESHOLD 10
+
 static void HandleController(int port, bool dual_analog, cont_state_t* state, float delta) {
-	Gamepad_SetButton(port, CCPAD_L, state->ltrig > 10);
-	Gamepad_SetButton(port, CCPAD_R, state->rtrig > 10);
-	// TODO: verify values are right
+	Gamepad_SetButton(port, CCPAD_L, state->ltrig > TRIGGER_THRESHOLD);
+	Gamepad_SetButton(port, CCPAD_R, state->rtrig > TRIGGER_THRESHOLD);
 
 	if (dual_analog)  {
 		HandleJoystick(port, PAD_AXIS_LEFT,  state->joyx,  state->joyy,  delta);
 		HandleJoystick(port, PAD_AXIS_RIGHT, state->joy2x, state->joy2y, delta);
 	} else {
 		HandleJoystick(port, PAD_AXIS_RIGHT, state->joyx, state->joyy, delta);
+	}
+}
+
+static void DisconnectMaplePort(int maplePort) {
+	long id = 0xDC + maplePort;
+
+	for (int i = 0; i < INPUT_MAX_GAMEPADS; i++)
+	{
+		struct GamepadDevice* dev = &Gamepad_Devices[i];
+		if (dev->deviceID != id) continue;
+
+		for (int btn = 0; btn < GAMEPAD_BTN_COUNT; btn++)
+		{
+			if (dev->pressed[btn])
+				Gamepad_SetButton(i, btn + GAMEPAD_BEG_BTN, 0);
+		}
+		dev->axisX[0] = 0; dev->axisY[0] = 0;
+		dev->axisX[1] = 0; dev->axisY[1] = 0;
+		dev->deviceID   = 0;
+		return;
 	}
 }
 
@@ -293,9 +342,9 @@ void Gamepads_Process(float delta) {
 	for (int i = 0; i < 4; i++)
 	{
 		cont  = maple_enum_type(i, MAPLE_FUNC_CONTROLLER);
-		if (!cont)  return;
+		if (!cont)  { DisconnectMaplePort(i); continue; }
 		state = (cont_state_t*)maple_dev_status(cont);
-		if (!state) return;
+		if (!state) { DisconnectMaplePort(i); continue; }
 
 		int dual_analog = cont_has_capabilities(cont, CONT_CAPABILITIES_DUAL_ANALOG);
 		if(dual_analog == -1) dual_analog = 0;
@@ -317,11 +366,8 @@ void Window_AllocFramebuffer(struct Bitmap* bmp, int width, int height) {
 }
 
 void Window_DrawFramebuffer(Rect2D r, struct Bitmap* bmp) {
-	// TODO: double buffering ??
-	//	https://dcemulation.org/phpBB/viewtopic.php?t=99999
-	//	https://dcemulation.org/phpBB/viewtopic.php?t=43214
 	vid_waitvbl();
-	
+
 	for (int y = r.y; y < r.y + r.height; y++)
 	{
 		BitmapCol* src = Bitmap_GetRow(bmp, y);
@@ -334,6 +380,8 @@ void Window_DrawFramebuffer(Rect2D r, struct Bitmap* bmp) {
 			dst[x] = ((BitmapCol_R(color) & 0xF8) << 8) | ((BitmapCol_G(color) & 0xFC) << 3) | (BitmapCol_B(color) >> 3);
 		}
 	}
+	/* Flip to the buffer we just drew for tear-free 2D UI */
+	vid_flip(-1);
 }
 
 void Window_FreeFramebuffer(struct Bitmap* bmp) {
@@ -362,9 +410,7 @@ void OnscreenKeyboard_Close(void) {
 *-------------------------------------------------------Misc/Other--------------------------------------------------------*
 *#########################################################################################################################*/
 void Window_ShowDialog(const char* title, const char* msg) {
-	/* TODO implement */
-	Platform_LogConst(title);
-	Platform_LogConst(msg);
+	VirtualDialog_Show(title, msg, false);
 }
 
 cc_result Window_OpenFileDialog(const struct OpenFileDialogArgs* args) {

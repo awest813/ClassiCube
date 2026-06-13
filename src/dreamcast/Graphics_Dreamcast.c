@@ -525,7 +525,7 @@ void Gfx_UpdateTexture(GfxResourceID texId, int originX, int originY, struct Bit
 		}
 		Y = (Y - maskY) & maskY;
 	}
-	// TODO: Do we need to flush VRAM?
+	/* PVR texture RAM from pvr_mem_malloc does not need a CPU cache flush */
 }
 
 void Gfx_BindTexture(GfxResourceID texId) {

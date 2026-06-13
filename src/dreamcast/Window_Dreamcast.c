@@ -10,6 +10,7 @@
 #include "../ExtMath.h"
 #include "../Options.h"
 #include "../VirtualKeyboard.h"
+#include "../VirtualDialog.h"
 #include <kos.h>
 
 #include "../VirtualCursor.h"
@@ -273,10 +274,11 @@ static void HandleJoystick(int port, int axis, int x, int y, float delta) {
 	Gamepad_SetAxis(port, axis, x / AXIS_SCALE, y / AXIS_SCALE, delta);
 }
 
+#define TRIGGER_THRESHOLD 10
+
 static void HandleController(int port, bool dual_analog, cont_state_t* state, float delta) {
-	Gamepad_SetButton(port, CCPAD_L, state->ltrig > 10);
-	Gamepad_SetButton(port, CCPAD_R, state->rtrig > 10);
-	// TODO: verify values are right
+	Gamepad_SetButton(port, CCPAD_L, state->ltrig > TRIGGER_THRESHOLD);
+	Gamepad_SetButton(port, CCPAD_R, state->rtrig > TRIGGER_THRESHOLD);
 
 	if (dual_analog)  {
 		HandleJoystick(port, PAD_AXIS_LEFT,  state->joyx,  state->joyy,  delta);
@@ -317,11 +319,8 @@ void Window_AllocFramebuffer(struct Bitmap* bmp, int width, int height) {
 }
 
 void Window_DrawFramebuffer(Rect2D r, struct Bitmap* bmp) {
-	// TODO: double buffering ??
-	//	https://dcemulation.org/phpBB/viewtopic.php?t=99999
-	//	https://dcemulation.org/phpBB/viewtopic.php?t=43214
 	vid_waitvbl();
-	
+
 	for (int y = r.y; y < r.y + r.height; y++)
 	{
 		BitmapCol* src = Bitmap_GetRow(bmp, y);
@@ -334,6 +333,8 @@ void Window_DrawFramebuffer(Rect2D r, struct Bitmap* bmp) {
 			dst[x] = ((BitmapCol_R(color) & 0xF8) << 8) | ((BitmapCol_G(color) & 0xFC) << 3) | (BitmapCol_B(color) >> 3);
 		}
 	}
+	/* Flip to the buffer we just drew for tear-free 2D UI */
+	vid_flip(-1);
 }
 
 void Window_FreeFramebuffer(struct Bitmap* bmp) {
@@ -362,9 +363,7 @@ void OnscreenKeyboard_Close(void) {
 *-------------------------------------------------------Misc/Other--------------------------------------------------------*
 *#########################################################################################################################*/
 void Window_ShowDialog(const char* title, const char* msg) {
-	/* TODO implement */
-	Platform_LogConst(title);
-	Platform_LogConst(msg);
+	VirtualDialog_Show(title, msg, false);
 }
 
 cc_result Window_OpenFileDialog(const struct OpenFileDialogArgs* args) {

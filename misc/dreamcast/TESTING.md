@@ -1,0 +1,75 @@
+# Dreamcast Port — Testing Checklist
+
+Use this checklist when debugging, auditing, or validating changes to the Dreamcast build.
+
+## Build
+
+```bash
+source /path/to/kos/environ.sh
+make dreamcast
+```
+
+Expected outputs: `ClassiCube-dc.elf`, `ClassiCube-dc.iso`, `ClassiCube-dc.cdi`
+
+Prerequisites:
+- KallistiOS toolchain with `environ.sh` sourced
+- `IP.BIN` in repo root (see `misc/dreamcast/readme.txt`)
+- `misc/dreamcast/classicube.zip` default texture pack
+
+CI reference: `.github/workflows/build_dreamcast.yml` (`ghcr.io/classicube/minimal-kos:latest`)
+
+## Emulator (Flycast)
+
+| Test | Steps | Pass criteria |
+|------|-------|---------------|
+| Boot | Load `ClassiCube-dc.cdi` or `.elf` via dcload | Reaches launcher menu |
+| Serial log | Enable SH4 serial / stdout in emulator | Boot messages visible, no crash spam |
+| Single-player | Start local game | World loads, movement and block place/break work |
+| Direct connect | Enter IP:port on DC connect screen | Joins server or shows dialog on failure |
+| Multi-controller | Map 2+ virtual controllers to ports A-D | All connected pads respond (see gamepad fix) |
+| Error dialog | Trigger connection failure | On-screen dialog appears (not just serial log) |
+| Audio | Enable sounds + music | Both play; no hang or divide-by-zero |
+| Screenshot | Press screenshot bind (X + inventory) | PNG written without crash |
+
+## Real Hardware
+
+| Test | Hardware | Pass criteria |
+|------|----------|---------------|
+| CD boot | Burnt CDI, no SD | Game boots from disc, read-only `/cd/` path works |
+| SD saves | SD adapter, FAT formatted | `/sd/ClassiCube/` created; options and maps persist after reboot |
+| VMU options | No SD, VMU in slot A1 | `options.txt` loads/saves via VMU fallback |
+| Modem | Dreamcast modem | PPP connects (~40 s); on-screen status during init |
+| BBA | Broadband adapter | Skips modem dial; network play works |
+| 4-player | 4 controllers on maple bus | Each port independently controls a player in split-screen |
+| Long session | 30+ min multiplayer | No crash, no VRAM exhaustion spiral |
+| VRAM pressure | Large view distance / many textures | View distance halves with chat warning; game continues |
+
+## Regression Areas (recent fixes)
+
+Verify these specifically after code changes:
+
+1. **Gamepad loop** — Controller on port B/C/D works when port A is empty
+2. **Socket flags** — Non-blocking connect completes; no `fcntl` side effects on other flags
+3. **Background color** — Fog/sky tint updates when changing worlds or weather
+4. **VirtualDialog** — `Window_ShowDialog` shows dismissible on-screen message
+5. **Framebuffer flip** — Launcher/menu UI has reduced tearing (`vid_flip` after 2D draw)
+6. **SD sync batching** — Saves persist after clean exit; no excessive SD wear during rapid file ops
+7. **Audio poll** — Music + SFX concurrently without glitches; no audio thread races
+
+## Known Limitations (not test failures)
+
+- `SetColorWrite` not implemented on PVR2 (same as several console backends)
+- `StreamContext_Pause` unsupported
+- No native file picker
+- Read-only when booting from CD without SD
+- Modem init can block boot ~40 seconds when no BBA
+
+## Reporting Issues
+
+On crash, note:
+- Emulator vs real hardware
+- SD / VMU / modem / BBA configuration
+- Serial log or on-screen register dump (crash handler shows R0–R15, PC, SR, PR)
+- Steps to reproduce
+
+Post to ClassiCube Discord or forums with the above details.

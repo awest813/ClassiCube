@@ -38,6 +38,18 @@ const cc_result ReturnCode_SocketInProgess  = EINPROGRESS;
 const cc_result ReturnCode_SocketWouldBlock = EWOULDBLOCK;
 const cc_result ReturnCode_SocketDropped    = EPIPE;
 static cc_bool usingSD;
+static cc_bool sd_fs_dirty;
+
+static void MarkSDDirty(void) {
+	if (usingSD) sd_fs_dirty = true;
+}
+
+static void SyncSDCard(void) {
+	if (!usingSD || !sd_fs_dirty) return;
+
+	fs_fat_sync("/sd");
+	sd_fs_dirty = false;
+}
 
 const char* Platform_AppNameSuffix = " Dreamcast";
 cc_bool Platform_ReadonlyFilesystem;
@@ -367,9 +379,8 @@ cc_result Directory_Create2(const cc_filepath* path) {
 	//  so rather than logging an error, just pretend it already exists
 	if (err == EINVAL) err = EEXIST;
 
-	// Changes are cached in memory, sync to SD card
-	// TODO maybe use fs_shutdown/fs_unmount and only sync once??
-	if (!err) fs_fat_sync("/sd");
+	// Changes are cached in memory, defer sync to Platform_Free
+	if (!err) MarkSDDirty();
 	return err;
 }
 
@@ -397,8 +408,7 @@ cc_result Directory_Enum(const cc_string* dirPath, void* obj, Directory_EnumCall
 		path.length = 0;
 		String_Format1(&path, "%s/", dirPath);
 
-		// ignore . and .. entry (PSP does return them)
-		// TODO: Does Dreamcast?
+		// ignore . and .. entries if returned by the filesystem
 		const char* src = entry->name;
 		if (src[0] == '.' && src[1] == '\0')                  continue;
 		if (src[0] == '.' && src[1] == '.' && src[2] == '\0') continue;
@@ -461,9 +471,8 @@ cc_result File_Close(cc_file file) {
 	if (file == vmu_write_FD) 
 		return VMUFile_Close(file);
 	
-	// Changes are cached in memory, sync to SD card
-	// TODO maybe use fs_shutdown/fs_unmount and only sync once??
-	if (usingSD) fs_fat_sync("/sd");
+	// Defer SD sync until shutdown or explicit flush
+	if (usingSD) MarkSDDirty();
 
 	int res = fs_close(file);
 	return res == -1 ? errno : 0;
@@ -772,7 +781,9 @@ void Platform_Init(void) {
 	Platform_LogConst("Starting in 5 seconds..");
 	Thread_Sleep(5000);
 }
-void Platform_Free(void) { }
+void Platform_Free(void) {
+	SyncSDCard();
+}
 
 cc_bool Platform_DescribeError(cc_result res, cc_string* dst) {
 	char chars[NATIVE_STR_LEN];

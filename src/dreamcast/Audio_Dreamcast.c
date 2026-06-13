@@ -1,7 +1,7 @@
 #include <kos.h>
 #include "../Audio.h"
 
-/* TODO needs way more testing, especially with sounds */
+/* Needs more testing on real hardware with concurrent music and sound effects */
 #define HANDLE_STATE_UNUSED    0
 #define HANDLE_STATE_ALLOCATED 1
 #define HANDLE_STATE_PLAYABLE  2
@@ -29,13 +29,7 @@ cc_bool AudioBackend_Init(void) {
 	return snd_stream_init() == 0;
 }
 
-void AudioBackend_Tick(void) {
-	// TODO is this really threadsafe with music? should this be done in Audio_Poll instead?
-	for (int i = 0; i < SND_STREAM_MAX; i++)
-	{
-		if (valid_handles[i] == HANDLE_STATE_PLAYABLE) snd_stream_poll(i);
-	}
-}
+void AudioBackend_Tick(void) { }
 
 void AudioBackend_Free(void) {
 	snd_stream_shutdown();
@@ -127,6 +121,10 @@ cc_result Audio_Play(struct AudioContext* ctx) {
 cc_result Audio_Poll(struct AudioContext* ctx, int* inUse) {
 	struct AudioBuffer* buf;
 	int count = 0;
+
+	if (ctx->count && ctx->hnd >= 0 && ctx->hnd < SND_STREAM_MAX &&
+		valid_handles[ctx->hnd] == HANDLE_STATE_PLAYABLE)
+		snd_stream_poll(ctx->hnd);
 
 	for (int i = 0; i < ctx->count; i++)
 	{

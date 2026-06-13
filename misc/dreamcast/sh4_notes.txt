@@ -42,3 +42,5 @@ See also: Graphics_Dreamcast.c Gfx_SetScissor — the PT (punch-through) polygon
 list is submitted directly to the TA, so USERCLIP commands must be submitted
 immediately rather than buffered in listPT.
 
+Gfx_DrawVb_Lines expands line pairs to thin quads — PVR2 has no native line primitives.
+

@@ -24,6 +24,15 @@ jobs:
         shell: bash
         run: bash misc/dreamcast/fetch-assets.sh
 
+      - name: Ensure IP.BIN
+        shell: bash
+        run: |
+          export PATH=/opt/toolchains/dc/kos/utils/:$PATH
+          if [ ! -f misc/dreamcast/IP.BIN ] && command -v makeip >/dev/null 2>&1; then
+            makeip misc/dreamcast/ip.txt misc/dreamcast/IP.BIN
+          fi
+          test -f misc/dreamcast/IP.BIN || (echo "Missing misc/dreamcast/IP.BIN — add makeip to CI image or commit a prebuilt copy" && exit 1)
+
       - name: Compile Dreamcast build
         shell: bash
         run: |

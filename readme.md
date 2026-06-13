@@ -78,7 +78,7 @@ And also runs on:
 * HPUX - tested on 11v3 IA64
 * SerenityOS - needs <code>SDL2</code>
 * Classic Mac OS (System 7 and later)
-* Dreamcast - unfinished, but usable (can [download from here](https://www.classicube.net/download/dreamcast))
+* Dreamcast - usable; hardware validation ongoing (see `misc/dreamcast/TESTING.md`) (can [download from here](https://www.classicube.net/download/dreamcast))
 * Saturn - unfinished, major rendering and **stability issues** (can [download from here](https://www.classicube.net/download/saturn))
 * 32x - terrible performance and practically unusable
 * Switch - unfinished, but usable (can [download from here](https://www.classicube.net/download/switch))
@@ -329,7 +329,7 @@ Additional setup (see also `misc/dreamcast/readme.txt`):
 - `misc/dreamcast/classicube.zip` — default texture pack bundled into the disc image
 - `misc/dreamcast/audio.zip` (optional) — sound assets for CD-only boots without SD
 
-Port status: unfinished but usable. See `misc/dreamcast/PLAN.md` and `misc/dreamcast/TESTING.md` for the roadmap and test checklist.
+Port status: usable; hardware validation ongoing. See `misc/dreamcast/PLAN.md` and `misc/dreamcast/TESTING.md` for the roadmap and test checklist.
 
 #### Saturn
 

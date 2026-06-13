@@ -14,9 +14,8 @@ Expected outputs: `ClassiCube-dc.elf`, `ClassiCube-dc.iso`, `ClassiCube-dc.cdi`
 
 Prerequisites:
 - KallistiOS toolchain with `environ.sh` sourced
-- `misc/dreamcast/IP.BIN` — generate with `makeip` (see `misc/dreamcast/readme.txt`)
-- `misc/dreamcast/classicube.zip` default texture pack
-- Optional: `misc/dreamcast/audio.zip` — bundled into disc as `audio/default.zip` and `audio/classicube.zip`
+- Run `make dreamcast-assets` — downloads texture/audio zips and generates `IP.BIN` if `makeip` is installed
+- Or manually: `misc/dreamcast/IP.BIN`, `misc/dreamcast/classicube.zip`, optional `misc/dreamcast/audio.zip`
 
 CI reference: `.github/workflows/build_dreamcast.yml` (`ghcr.io/classicube/minimal-kos:latest`)
 
@@ -49,7 +48,7 @@ On real hardware, use a Dreamcast serial cable or coders cable with `dc-tool -x`
 |------|----------|---------------|
 | CD boot | Burnt CDI, no SD | Game boots from disc, read-only `/cd/` path works |
 | SD saves | SD adapter, FAT formatted | `/sd/ClassiCube/` created; options and maps persist after reboot |
-| VMU options | No SD, VMU in slot A1 | `options.txt` loads/saves via VMU fallback |
+| VMU options | No SD, VMU in any port/slot | `options.txt` loads/saves via VMU fallback |
 | Modem | Dreamcast modem | PPP connects (~40 s); on-screen status during init |
 | BBA | Broadband adapter | Skips modem dial; network play works |
 | 4-player | 4 controllers on maple bus | Each port independently controls a player in split-screen |
@@ -83,7 +82,7 @@ Verify these specifically after code changes:
 - `SetColorWrite` not implemented on PVR2 (same as several console backends)
 - No native file picker
 - Read-only when booting from CD without SD
-- Modem init can block boot ~40 seconds when no BBA
+- Modem init can block boot ~40 seconds on CD-only boots (hold START at boot or use SD to skip)
 
 ## Reporting Issues
 

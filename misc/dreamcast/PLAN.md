@@ -1,8 +1,20 @@
 # Dreamcast Port — Work Plan
 
-ClassiCube’s Dreamcast build is **unfinished but usable**: it boots, renders the world via the PVR2, supports multiplayer over the modem or broadband adapter, and ships in CI as a `.cdi`. This document is a practical roadmap for bringing the port closer to “finished.”
+ClassiCube’s Dreamcast build is **usable but not fully hardware-validated**: it boots, renders the world via the PVR2, supports multiplayer over the modem or broadband adapter, and can produce a `.cdi` in CI when KOS assets are present.
 
-**Status (as of repo state):** playable with known gaps in graphics state, audio reliability, UI polish, and real-hardware testing coverage.
+**Status:** P0 stability fixes and P2 polish are **code-complete** on branch `cursor/dreamcast-p0-fixes-5f6d`. Remaining work is mostly **real-hardware / Flycast validation** (audio stress, split-screen, 30+ min sessions). See `TESTING.md` for the regression checklist.
+
+### Completed in this effort (code)
+
+| Area | Changes |
+|------|---------|
+| Stability | Gamepad `continue` fix, socket `fcntl`, crash handler, thread create check |
+| Graphics | Clear color, scissor PT-list + disable reset, vsync, VRAM cap, line drawing, texture update guard |
+| Input | Per-port keyboard, all-port mouse, gamepad disconnect, button labels, bind fixes |
+| Platform | BBA+SD coexistence, SD sync batching, VMU any-slot, modem skip (SD / START), entropy |
+| Audio | Poll in `Audio_Poll`, callback buffer skip, `StreamContext_Pause` |
+| UI | VirtualDialog, framebuffer `vid_flip` |
+| Build | `fetch-assets.sh`, `make dreamcast-assets`, CI asset fetch, Makefile checks |
 
 ---
 
@@ -84,16 +96,17 @@ flowchart TB
 
 1. [KallistiOS](https://github.com/KallistiOS/KallistiOS) with environment sourced (`environ.sh`)
 2. Host tools: `mkisofs`, `cdi4dc`, KOS `scramble`
-3. **IP.BIN** — not in repo (gitignored). Generate with [makeip](https://github.com/Dreamcast-Projects/makeip):
+3. **IP.BIN** — not in repo (gitignored). Generate with [makeip](https://github.com/Dreamcast-Projects/makeip), or run `make dreamcast-assets` (attempts `makeip` if installed):
    ```bash
-   makeip misc/dreamcast/ip.txt IP.BIN -l boot_logo.png
+   makeip misc/dreamcast/ip.txt misc/dreamcast/IP.BIN
    ```
-4. **classicube.zip** — default texture pack copied into ISO at build time (`misc/dreamcast/classicube.zip`); ensure this exists before `make dreamcast`
+4. **Disc assets** — run `make dreamcast-assets` to download `classicube.zip` and `audio.zip` into `misc/dreamcast/`
 
 ### Build
 
 ```bash
 source /path/to/kos/environ.sh
+make dreamcast-assets   # texture + audio zips; tries to generate IP.BIN
 make dreamcast
 ```
 
@@ -126,6 +139,8 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] `Gfx_UpdateTexture` — PVR RAM from `pvr_mem_malloc` does not need CPU cache flush
 - [x] `Gfx_ClearBuffers` — applies background color when color buffer requested
 - [x] `Gfx_SetViewport` — loads viewport matrix to SH4 FPU for split-screen
+- [x] `Gfx_DrawVb_Lines` — line pairs expanded to thin quads (selection box edges)
+- [x] `Gfx_UpdateTexture` — guards against partial updates on paletted 4bpp textures
 
 ### Audio (`Audio_Dreamcast.c`)
 
@@ -149,12 +164,11 @@ Issues explicitly marked in `src/dreamcast/`:
 
 - [x] SD sync: batched via `MarkSDDirty` / `SyncSDCard` on `Platform_Free` (not per `File_Close`)
 - [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
-- [x] Skip modem dial when SD card is mounted (offline play from SD)
+- [x] Skip modem dial when SD card mounted or START held at boot
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)
 - [x] VMU save checks `fs_write` result
 - [x] `Directory_Enum` — `.` / `..` filtered (defensive, same as other ports)
 - [x] `Socket_SetNonBlocking` — preserves flags via `F_GETFL` / `F_SETFL`
-- [x] Skip modem dial when SD card is mounted or START held at boot
 
 ---
 
@@ -215,7 +229,6 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
 - [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention noted; init order fixed)
-- [ ] Optional: ship a minimal default `classicube.zip` or build step to fetch it
 - [x] `make dreamcast-assets` / `fetch-assets.sh` downloads texture + audio zips for CI and local builds
 
 ### 5. Input & split-screen (P2–P3)
@@ -271,7 +284,21 @@ gantt
   TA buffer tuning           :e2, 8, 10
 ```
 
-**Next focus:** hardware validation per `TESTING.md`; optional `misc/dreamcast/audio.zip` for CD sound bundling.
+**Next focus:** hardware validation per `TESTING.md` (30+ min sessions, audio stress, split-screen).
+
+---
+
+## Definition of Done (port “finished”)
+
+The Dreamcast port can be considered **finished** when:
+
+1. [~] CI produces a bootable `.cdi` — workflow fetches zips; still needs `IP.BIN` (makeip or pre-seeded in `minimal-kos`)
+2. [ ] Single-player and multiplayer sessions run **30+ minutes** on real hardware without crash
+3. [x] Graphics issues resolved or documented — clear color, scissor done; `SetColorWrite` is a PVR2 hardware limit
+4. [ ] Audio plays music and SFX concurrently without glitches (code paths audited; needs HW stress test)
+5. [~] Saves on SD; VMU options — implemented; needs HW verification on VMU-only setups
+6. [~] All four controller ports — `Gamepads_Process` fixed; needs HW 4-player test
+7. [ ] `readme.md` status updated after hardware sign-off
 
 ---
 
@@ -296,17 +323,3 @@ gantt
 - [IP.BIN format](https://mc.pp.se/dc/ip.bin.html)
 - ClassiCube `doc/portability.md` — general porting requirements
 - Main `readme.md` — user-facing build instructions and download link
-
----
-
-## Definition of Done (port “finished”)
-
-The Dreamcast port can be considered **finished** when:
-
-1. CI produces a bootable `.cdi` without manual steps beyond KOS toolchain
-2. Single-player and multiplayer sessions run **30+ minutes** on real hardware without crash
-3. Graphics TODOs (clear color, color write, scissor) are resolved or explicitly documented as hardware limits
-4. Audio plays music and SFX concurrently without glitches
-5. Saves work on SD; options work on VMU-only setups
-6. All four controller ports work independently
-7. `readme.md` status line updated from “unfinished, but usable” to “usable” or better

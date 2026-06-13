@@ -2,6 +2,7 @@
 #include "../Audio.h"
 
 /* Needs more testing on real hardware with concurrent music and sound effects */
+/* Multi-stream polling derived from KOS snd_stream / multi-stream example */
 #define HANDLE_STATE_UNUSED    0
 #define HANDLE_STATE_ALLOCATED 1
 #define HANDLE_STATE_PLAYABLE  2
@@ -25,11 +26,22 @@ struct AudioContext {
 #include "../_AudioBase.h"
 #include "../Funcs.h"
 
+static void PollAllStreams(void) {
+	for (int i = 0; i < SND_STREAM_MAX; i++)
+	{
+		if (valid_handles[i] == HANDLE_STATE_PLAYABLE)
+			snd_stream_poll(i);
+	}
+}
+
 cc_bool AudioBackend_Init(void) {
 	return snd_stream_init() == 0;
 }
 
-void AudioBackend_Tick(void) { }
+void AudioBackend_Tick(void) {
+	/* KOS snd_stream pattern: poll every active stream each frame (multi-stream) */
+	PollAllStreams();
+}
 
 void AudioBackend_Free(void) {
 	snd_stream_shutdown();
@@ -144,7 +156,7 @@ cc_result Audio_Poll(struct AudioContext* ctx, int* inUse) {
 
 	if (ctx->count && ctx->hnd >= 0 && ctx->hnd < SND_STREAM_MAX &&
 		valid_handles[ctx->hnd] == HANDLE_STATE_PLAYABLE)
-		snd_stream_poll(ctx->hnd);
+		PollAllStreams();
 
 	for (int i = 0; i < ctx->count; i++)
 	{

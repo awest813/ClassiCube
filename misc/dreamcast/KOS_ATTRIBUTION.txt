@@ -1,0 +1,21 @@
+KallistiOS (KOS) derived code in ClassiCube Dreamcast port
+==========================================================
+
+KallistiOS is BSD licensed. When using code derived from KOS examples or
+kernel sources, retain copyright notices and document the origin.
+
+Sources adapted in this port:
+
+1. examples/dreamcast/pvr/pvrline/pvrline.c
+   Copyright (C) 2024 Jason Martin
+   Used in: src/dreamcast/PVR_Line.c (draw_pvr_line)
+
+2. kernel/arch/dreamcast/sound/snd_stream.c (API usage patterns)
+   Copyright (C) 2000-2025 KallistiOS contributors
+   Used in: src/dreamcast/Audio_Dreamcast.c (multi-stream polling)
+
+3. examples/dreamcast/sound/multi-stream/main.c
+   Copyright (C) 2023 Andy Barajas
+   Reference for concurrent snd_stream instances
+
+Full KOS license: https://github.com/KallistiOS/KallistiOS/blob/master/COPYING.KOS

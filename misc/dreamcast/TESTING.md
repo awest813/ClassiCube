@@ -75,7 +75,8 @@ Verify these specifically after code changes:
 14. **VSync** — Frame pacing stable when vsync enabled in options
 15. **Audio empty buffers** — Looping sounds and rapid SFX do not stall the snd_stream callback
 16. **VMU any slot** — Options load/save on VMU in any maple port/slot
-17. **Selection box edges** — Multiplayer selection regions show wireframe edges
+17. **Selection box edges** — Multiplayer selection regions show wireframe edges (KOS pvrline path)
+18. **Multi-stream audio** — Music + SFX concurrently without stalling (all streams polled each frame)
 
 ## Known Limitations (not test failures)
 

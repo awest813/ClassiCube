@@ -139,7 +139,7 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] `Gfx_UpdateTexture` — PVR RAM from `pvr_mem_malloc` does not need CPU cache flush
 - [x] `Gfx_ClearBuffers` — applies background color when color buffer requested
 - [x] `Gfx_SetViewport` — loads viewport matrix to SH4 FPU for split-screen
-- [x] `Gfx_DrawVb_Lines` — line pairs expanded to thin quads (selection box edges)
+- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` example (`PVR_Line.c`, screen-space `frsqrt` expansion)
 - [x] `Gfx_UpdateTexture` — guards against partial updates on paletted 4bpp textures
 
 ### Audio (`Audio_Dreamcast.c`)

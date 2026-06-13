@@ -10,6 +10,7 @@
 #include <dc/matrix.h>
 #include <dc/pvr.h>
 #include "VertexSubmit.h"
+#include "PVR_Line.h"
 
 static cc_bool renderingDisabled;
 static cc_bool stateDirty;
@@ -994,52 +995,51 @@ void Gfx_SetVertexFormat(VertexFormat fmt) {
 	stateDirty = true;
 }
 
-static void LineToQuad(struct VertexColoured* a, struct VertexColoured* b,
-		struct VertexColoured* out, float thickness) {
-	float dx = b->x - a->x, dy = b->y - a->y, dz = b->z - a->z;
-	float px, py, pz, len;
+static void ProjectToScreen(const struct VertexColoured* in, vec3f_t* out) {
+	matrix_t saved;
+	mat_store(&saved);
 
-	/* Perpendicular in XZ plane (sufficient for axis-aligned selection edges) */
-	px = -dz; py = 0.0f; pz = dx;
-	len = Math_SqrtF(px * px + pz * pz);
-	if (len < 0.001f) {
-		px = thickness; py = 0.0f; pz = 0.0f;
-	} else {
-		px = px / len * thickness;
-		pz = pz / len * thickness;
-		py = 0.0f;
-	}
+	mat_load(&mat_vp);
+	mat_apply(&_proj);
+	mat_apply(&_view);
+	mat_trans_point3(out, in->x, in->y, in->z);
 
-	out[0] = *a; out[0].x += px; out[0].z += pz;
-	out[1] = *a; out[1].x -= px; out[1].z -= pz;
-	out[2] = *b; out[2].x -= px; out[2].z -= pz;
-	out[3] = *b; out[3].x += px; out[3].z += pz;
+	mat_load(&saved);
+}
+
+static int PackedCol_ToPVR(PackedCol col) {
+	return PVR_PACK_COLOR(PackedCol_A(col) / 255.0f,
+		PackedCol_R(col) / 255.0f,
+		PackedCol_G(col) / 255.0f,
+		PackedCol_B(col) / 255.0f);
 }
 
 void Gfx_DrawVb_Lines(int verticesCount) {
-	struct VertexColoured* src, *tmp;
-	int lineCount, quadVerts;
-	VertexFormat prevFmt;
-	const float thickness = 1.0f / 32.0f;
+	struct VertexColoured* src;
+	pvr_poly_cxt_t cxt;
+	pvr_poly_hdr_t hdr;
+	vec3f_t v1, v2;
+	int lineCount;
 
 	if (!verticesCount || renderingDisabled) return;
-	lineCount  = verticesCount >> 1;
-	quadVerts  = lineCount << 2;
+	lineCount = verticesCount >> 1;
 	if (!lineCount) return;
 
+	pvr_poly_cxt_col(&cxt, PVR_LIST_OP_POLY);
+	if (gfx_depthTest)  cxt.depth.comparison = PVR_DEPTHCMP_GEQUAL;
+	if (gfx_depthWrite) cxt.depth.write      = PVR_DEPTHWRITE_ENABLE;
+	pvr_poly_compile(&hdr, &cxt);
+
 	src = (struct VertexColoured*)gfx_vertices;
-	tmp = (struct VertexColoured*)Mem_Alloc(quadVerts, SIZEOF_VERTEX_COLOURED, "line quads");
-	if (!tmp) return;
-
 	for (int i = 0; i < lineCount; i++) {
-		LineToQuad(&src[i * 2], &src[i * 2 + 1], &tmp[i * 4], thickness);
-	}
+		struct VertexColoured* a = &src[i * 2];
+		struct VertexColoured* b = &src[i * 2 + 1];
 
-	prevFmt = gfx_format;
-	Gfx_SetVertexFormat(VERTEX_FORMAT_COLOURED);
-	DrawQuads(quadVerts, tmp, 0);
-	Gfx_SetVertexFormat(prevFmt);
-	Mem_Free(tmp);
+		ProjectToScreen(a, &v1);
+		ProjectToScreen(b, &v2);
+		PVR_Line_Draw(&v1, &v2, 1.0f, PackedCol_ToPVR(a->Col),
+			PVR_LIST_OP_POLY, &hdr);
+	}
 }
 
 void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints hints) {

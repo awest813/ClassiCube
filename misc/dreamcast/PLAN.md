@@ -154,7 +154,7 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] VMU save checks `fs_write` result
 - [x] `Directory_Enum` — `.` / `..` filtered (defensive, same as other ports)
 - [x] `Socket_SetNonBlocking` — preserves flags via `F_GETFL` / `F_SETFL`
-- [ ] Modem init blocks boot ~40 s with on-screen text — skipped when SD present; async init still TODO
+- [x] Skip modem dial when SD card is mounted or START held at boot
 
 ---
 
@@ -188,7 +188,8 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Profile VRAM usage on large worlds — default view distance 64, cycle capped at 128, MAX_TEXTURE_COUNT 512
 - [x] Validate scissor (`Gfx_SetScissor`) — PT list clips submitted immediately; full-screen clip resets TA on disable
 - [x] Review fog table updates vs `gfx_fogEnabled` toggles
-- [x] Confirm texture upload flush requirements after `Gfx_UpdateTexture`
+- [x] `Gfx_DrawVb_Lines` — line pairs expanded to thin quads for selection box edges
+- [x] `Gfx_UpdateTexture` — guard against partial updates on paletted (4bpp) textures
 - [ ] Real-hardware comparison with Flycast for Z-fighting, sorting, and translucent water
 
 **Performance ideas (P3):**
@@ -215,6 +216,7 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention noted; init order fixed)
 - [ ] Optional: ship a minimal default `classicube.zip` or build step to fetch it
+- [x] `make dreamcast-assets` / `fetch-assets.sh` downloads texture + audio zips for CI and local builds
 
 ### 5. Input & split-screen (P2–P3)
 

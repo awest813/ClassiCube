@@ -42,6 +42,9 @@ LIBS		= -lm -lppp -lkosfat
 #---------------------------------------------------------------------------------
 default: $(BUILD_DIR) $(TARGET).cdi
 
+assets:
+	bash misc/dreamcast/fetch-assets.sh
+
 clean:
 	rm -f $(TARGET).cdi $(TARGET).iso $(TARGET).elf $(TARGET)-scr.bin $(TARGET).bin $(OBJS) $(DEPFILES) IP.BIN
 	rm -rf ISO_FILES

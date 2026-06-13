@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Fetch Dreamcast disc assets
+        shell: bash
+        run: bash misc/dreamcast/fetch-assets.sh
+
       - name: Compile Dreamcast build
         shell: bash
         run: |

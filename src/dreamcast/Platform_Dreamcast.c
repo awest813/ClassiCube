@@ -822,20 +822,25 @@ static void InitModem(void) {
 	Platform_LogConst("Modem connected");
 }
 
+static cc_bool StartHeldOnPorts(void) {
+	for (int p = 0; p < 4; p++)
+	{
+		maple_device_t* cont = maple_enum_type(p, MAPLE_FUNC_CONTROLLER);
+		cont_state_t* state;
+		if (!cont) continue;
+
+		state = (cont_state_t*)maple_dev_status(cont);
+		if (state && (state->buttons & CONT_START)) return true;
+	}
+	return false;
+}
+
 static void WaitToStart(void) {
 	Platform_LogConst("Press START to continue (or wait 3 seconds)..");
 
 	for (int i = 0; i < 30; i++)
 	{
-		for (int p = 0; p < 4; p++)
-		{
-			maple_device_t* cont = maple_enum_type(p, MAPLE_FUNC_CONTROLLER);
-			cont_state_t* state;
-			if (!cont) continue;
-
-			state = (cont_state_t*)maple_dev_status(cont);
-			if (state && (state->buttons & CONT_START)) return;
-		}
+		if (StartHeldOnPorts()) return;
 		Thread_Sleep(100);
 	}
 }
@@ -853,11 +858,11 @@ void Platform_Init(void) {
 	if (net_default_dev) return;
 	if (usingSD) {
 		Platform_LogConst("SD card ready - skipping modem init");
-		WaitToStart();
-		return;
+	} else if (StartHeldOnPorts()) {
+		Platform_LogConst("START held - skipping modem init");
+	} else {
+		InitModem();
 	}
-	// in case Broadband Adapter isn't active
-	InitModem();
 	WaitToStart();
 }
 void Platform_Free(void) {

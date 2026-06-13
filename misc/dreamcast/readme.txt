@@ -4,7 +4,7 @@ To generate a custom IP.bin, compile https://github.com/Dreamcast-Projects/makei
 
 Then run: makeip misc/dreamcast/ip.txt misc/dreamcast/IP.BIN -l misc/dreamcast/boot_logo.png
 
-Optional disc assets (not committed — copy before `make dreamcast`):
+Optional disc assets (not committed — run `make dreamcast-assets` or see `fetch-assets.sh`):
 - misc/dreamcast/classicube.zip  → texpacks/default.zip on disc
 - misc/dreamcast/audio.zip        → audio/default.zip and audio/classicube.zip on disc
 

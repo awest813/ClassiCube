@@ -504,6 +504,7 @@ GfxResourceID Gfx_AllocTexture(struct Bitmap* bmp, int rowWidth, cc_uint8 flags,
 
 void Gfx_UpdateTexture(GfxResourceID texId, int originX, int originY, struct Bitmap* part, int rowWidth, cc_bool mipmaps) {
 	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	if (tex->format != PVR_TXRFMT_ARGB4444) return;
 	
 	int width = part->width, height = part->height;
 	unsigned maskX, maskY;
@@ -993,9 +994,52 @@ void Gfx_SetVertexFormat(VertexFormat fmt) {
 	stateDirty = true;
 }
 
+static void LineToQuad(struct VertexColoured* a, struct VertexColoured* b,
+		struct VertexColoured* out, float thickness) {
+	float dx = b->x - a->x, dy = b->y - a->y, dz = b->z - a->z;
+	float px, py, pz, len;
+
+	/* Perpendicular in XZ plane (sufficient for axis-aligned selection edges) */
+	px = -dz; py = 0.0f; pz = dx;
+	len = Math_SqrtF(px * px + pz * pz);
+	if (len < 0.001f) {
+		px = thickness; py = 0.0f; pz = 0.0f;
+	} else {
+		px = px / len * thickness;
+		pz = pz / len * thickness;
+		py = 0.0f;
+	}
+
+	out[0] = *a; out[0].x += px; out[0].z += pz;
+	out[1] = *a; out[1].x -= px; out[1].z -= pz;
+	out[2] = *b; out[2].x -= px; out[2].z -= pz;
+	out[3] = *b; out[3].x += px; out[3].z += pz;
+}
+
 void Gfx_DrawVb_Lines(int verticesCount) {
-	//SetupVertices(0);
-	//glDrawArrays(GL_LINES, 0, verticesCount);
+	struct VertexColoured* src, *tmp;
+	int lineCount, quadVerts;
+	VertexFormat prevFmt;
+	const float thickness = 1.0f / 32.0f;
+
+	if (!verticesCount || renderingDisabled) return;
+	lineCount  = verticesCount >> 1;
+	quadVerts  = lineCount << 2;
+	if (!lineCount) return;
+
+	src = (struct VertexColoured*)gfx_vertices;
+	tmp = (struct VertexColoured*)Mem_Alloc(quadVerts, SIZEOF_VERTEX_COLOURED, "line quads");
+	if (!tmp) return;
+
+	for (int i = 0; i < lineCount; i++) {
+		LineToQuad(&src[i * 2], &src[i * 2 + 1], &tmp[i * 4], thickness);
+	}
+
+	prevFmt = gfx_format;
+	Gfx_SetVertexFormat(VERTEX_FORMAT_COLOURED);
+	DrawQuads(quadVerts, tmp, 0);
+	Gfx_SetVertexFormat(prevFmt);
+	Mem_Free(tmp);
 }
 
 void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints hints) {

@@ -278,6 +278,9 @@ saturn:
 	$(MAKE) -f misc/saturn/Makefile
 dreamcast:
 	$(MAKE) -f misc/dreamcast/Makefile
+
+dreamcast-assets:
+	bash misc/dreamcast/fetch-assets.sh
 psp:
 	$(MAKE) -f misc/psp/Makefile
 vita:

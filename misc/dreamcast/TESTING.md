@@ -6,6 +6,7 @@ Use this checklist when debugging, auditing, or validating changes to the Dreamc
 
 ```bash
 source /path/to/kos/environ.sh
+make dreamcast-assets   # optional: download texture + audio zips
 make dreamcast
 ```
 
@@ -70,11 +71,12 @@ Verify these specifically after code changes:
 9. **Gamepad hot-unplug** — Disconnecting a controller clears stuck inputs
 10. **Keyboard / mouse ports** — Keyboard on any maple port; mouse not limited to port A
 11. **BBA + SD** — Broadband adapter and SD card both work; saves land on `/sd/ClassiCube/`
-12. **SD boot skip** — SD-only boot skips ~40 s modem dial
+12. **SD boot skip** — SD-only boot skips ~40 s modem dial; START at boot also skips modem
 13. **Scissor / split-screen** — Viewport regions clip geometry correctly; scissor disable restores full-screen
 14. **VSync** — Frame pacing stable when vsync enabled in options
 15. **Audio empty buffers** — Looping sounds and rapid SFX do not stall the snd_stream callback
 16. **VMU any slot** — Options load/save on VMU in any maple port/slot
+17. **Selection box edges** — Multiplayer selection regions show wireframe edges
 
 ## Known Limitations (not test failures)
 

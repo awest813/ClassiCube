@@ -263,8 +263,10 @@ void Launcher_Setup(void) {
 	Launcher_TryLoadTexturePack();
 
 	Http_Component.Init();
+#ifndef CC_BUILD_DREAMCAST
 #ifdef CC_BUILD_NETWORKING
 	CheckUpdateTask_Run();
+#endif
 #endif
 
 #ifdef CC_BUILD_RESOURCES

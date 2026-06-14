@@ -457,10 +457,11 @@ static struct DirectConnectScreen {
 	struct LLabel lblStatus;
 #ifdef CC_BUILD_DREAMCAST
 	struct LCheckbox cbSkipModem;
+	struct LLabel lblHint;
 #endif
 } DirectConnectScreen CC_BIG_VAR;
 
-#define DIRECTCONNECT_SCREEN_MAXWIDGETS 7
+#define DIRECTCONNECT_SCREEN_MAXWIDGETS 8
 static struct LWidget* directConnect_widgets[DIRECTCONNECT_SCREEN_MAXWIDGETS];
 
 LAYOUTS dc_iptUsername[] = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE, -120 } };
@@ -472,6 +473,15 @@ LAYOUTS dc_btnBack[]     = { { ANCHOR_CENTRE,  125 }, { ANCHOR_CENTRE, 20 } };
 LAYOUTS dc_lblStatus[]   = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 95 } };
 #ifdef CC_BUILD_DREAMCAST
 LAYOUTS dc_cbSkipModem[] = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE, 15 } };
+LAYOUTS dc_lblHint[]     = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 130 } };
+LAYOUTS dc_main_lblInfo[]    = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE, -195 } };
+LAYOUTS dc_main_lblHint[]    = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  215 } };
+LAYOUTS dc_main_btnSPlayer[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE, -110 } };
+LAYOUTS dc_main_btnDirect[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  -55 } };
+LAYOUTS dc_main_btnSplit[]   = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,    0 } };
+LAYOUTS dc_main_btnOptions[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,   55 } };
+LAYOUTS dc_main_btnExit[]    = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  110 } };
+LAYOUTS dc_main_lblStatus[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  170 } };
 #endif
 
 
@@ -539,12 +549,19 @@ static void DirectConnectScreen_StartClient(void* w) {
 static void DirectConnectScreen_Activated(struct LScreen* s_) {
 	struct DirectConnectScreen* s = (struct DirectConnectScreen*)s_;
 
+#ifdef CC_BUILD_DREAMCAST
+	LInput_Add(s,  &s->iptUsername, 330, "Player name..",            dc_iptUsername);
+	LInput_Add(s,  &s->iptAddress,  330, "Server IP:port..",         dc_iptAddress);
+	LInput_Add(s,  &s->iptMppass,   330, "Password (mppass)..",      dc_iptMppass);
+#else
 	LInput_Add(s,  &s->iptUsername, 330, "Username..",               dc_iptUsername);
 	LInput_Add(s,  &s->iptAddress,  330, "IP address:Port number..", dc_iptAddress);
 	LInput_Add(s,  &s->iptMppass,   330, "Mppass..",                 dc_iptMppass);
+#endif
 #ifdef CC_BUILD_DREAMCAST
 	LCheckbox_Add(s, &s->cbSkipModem, "Skip modem dial on next boot",
 				DirectConnectScreen_ToggleSkipModem, dc_cbSkipModem);
+	LLabel_Add(s,  &s->lblHint, "&7Connect to a Classicube server by IP", dc_lblHint);
 #endif
 
 	LButton_Add(s, &s->btnConnect, 110, 35, "Connect",
@@ -594,7 +611,11 @@ void DirectConnectScreen_SetActive(void) {
 
 	s->Activated      = DirectConnectScreen_Activated;
 	s->LoadState      = DirectConnectScreen_Load;
+#ifdef CC_BUILD_DREAMCAST
+	s->title          = "Multiplayer";
+#else
 	s->title          = "Direct connect";
+#endif
 	s->onEnterWidget  = (struct LWidget*)&s->btnConnect;
 	s->onEscapeWidget = (struct LWidget*)&s->btnBack;
 
@@ -729,10 +750,13 @@ static struct MainScreen {
 	struct LButton btnRegister, btnOptions, btnUpdates;
 	struct LInput iptUsername, iptPassword;
 	struct LLabel lblStatus, lblUpdate;
+#ifdef CC_BUILD_DREAMCAST
+	struct LLabel lblInfo, lblHint;
+#endif
 	cc_bool signingIn;
 } MainScreen CC_BIG_VAR;
 
-#define MAINSCREEN_MAX_WIDGETS 12
+#define MAINSCREEN_MAX_WIDGETS 13
 static struct LWidget* main_widgets[MAINSCREEN_MAX_WIDGETS];
 
 LAYOUTS main_iptUsername[] = { { ANCHOR_CENTRE_MIN, -140 }, { ANCHOR_CENTRE, -120 } };
@@ -868,6 +892,45 @@ static void MainScreen_ExitApp(void* w) {
 	Window_Main.Exists = false;
 }
 
+#ifdef CC_BUILD_DREAMCAST
+static void MainScreen_FillInfo_DC(struct MainScreen* s) {
+	cc_string storage, network, line;
+	char storageBuffer[80], networkBuffer[80], lineBuffer[160];
+
+	String_InitArray(storage, storageBuffer);
+	String_InitArray(network, networkBuffer);
+	String_InitArray(line, lineBuffer);
+	Platform_GetLauncherStatus(&storage, &network);
+	String_Format2(&line, "&eStorage: %s  |  Network: %s", &storage, &network);
+	LLabel_SetText(&s->lblInfo, &line);
+}
+
+static void MainScreen_Activated(struct LScreen* s_) {
+	struct MainScreen* s = (struct MainScreen*)s_;
+
+	LLabel_Add(s, &s->lblInfo, "", dc_main_lblInfo);
+	LButton_Add(s, &s->btnSPlayer, 260, 40, "Play solo",
+				MainScreen_Singleplayer, dc_main_btnSPlayer);
+	LButton_Add(s, &s->btnDirect, 260, 40, "Multiplayer",
+				SwitchToDirectConnect, dc_main_btnDirect);
+#ifdef CC_BUILD_SPLITSCREEN
+	LButton_Add(s, &s->btnSplit, 260, 40, "Splitscreen",
+				SwitchToSplitScreen, dc_main_btnSplit);
+#endif
+	LButton_Add(s, &s->btnOptions, 120, 35, "Options",
+				SwitchToSettings, dc_main_btnOptions);
+	LButton_Add(s, &s->btnUpdates, 120, 35, "Exit",
+				MainScreen_ExitApp, dc_main_btnExit);
+	LLabel_Add(s,  &s->lblStatus, "", dc_main_lblStatus);
+	LLabel_Add(s,  &s->lblHint, "&7D-pad: move   A: confirm   B: back", dc_main_lblHint);
+}
+
+static void MainScreen_Load(struct LScreen* s_) {
+	struct MainScreen* s = (struct MainScreen*)s_;
+	MainScreen_FillInfo_DC(s);
+	LLabel_SetConst(&s->lblStatus, "");
+}
+#else
 static void MainScreen_Activated(struct LScreen* s_) {
 	struct MainScreen* s = (struct MainScreen*)s_;
 
@@ -946,6 +1009,7 @@ static void MainScreen_Load(struct LScreen* s_) {
 	if (!user.length || !pass.length) return;
 	MainScreen_DoLogin();
 }
+#endif
 
 static void MainScreen_TickCheckUpdates(struct MainScreen* s) {
 	if (!CheckUpdateTask.Base.working)   return;
@@ -1028,11 +1092,13 @@ static void MainScreen_Tick(struct LScreen* s_) {
 	struct MainScreen* s = (struct MainScreen*)s_;
 	LScreen_Tick(s_);
 
+#ifndef CC_BUILD_DREAMCAST
 #ifdef CC_BUILD_NETWORKING
 	MainScreen_TickCheckUpdates(s);
 	MainScreen_TickGetToken(s);
 	MainScreen_TickSignIn(s);
 	MainScreen_TickFetchServers(s);
+#endif
 #endif
 }
 
@@ -1047,11 +1113,14 @@ void MainScreen_SetActive(void) {
 	s->LoadState     = MainScreen_Load;
 	s->Tick          = MainScreen_Tick;
 	s->title         = "ClassiCube";
+	s->onEnterWidget = (struct LWidget*)&s->btnSPlayer;
 
+#ifndef CC_BUILD_DREAMCAST
 #ifdef CC_BUILD_NETWORKING
 	s->onEnterWidget = (struct LWidget*)&s->btnLogin;
 #else
 	s->onEnterWidget = (struct LWidget*)&s->btnSPlayer;
+#endif
 #endif
 
 	Launcher_SetScreen((struct LScreen*)s);

@@ -84,7 +84,9 @@ Verify these specifically after code changes:
 25. **Spawn bind** — Set spawn is B+START; START alone sends chat
 27. **Coloured direct PT** — Map overlay / coloured UI quads use store-queue direct path
 28. **Line batching** — Selection box edges deferred to OP list (no PT list interruption)
-30. **Boot splash** — Title + "Hold START" hint on CRT; network log scrolls in lower area
+31. **Boot UX overhaul** — Blue splash, storage/network lines, live status, loading transition
+32. **Console main menu** — No web login; Play solo / Multiplayer / Splitscreen / Options / Exit
+33. **Multiplayer screen** — Renamed title, connect hint, controller help on main menu
 
 ## Known Limitations (not test failures)
 

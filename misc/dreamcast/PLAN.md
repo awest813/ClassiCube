@@ -171,7 +171,9 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
 - [x] Skip modem dial when SD card mounted or START held at boot
 - [x] `launcher-dc-skipmodem` option + Direct connect checkbox
-- [x] Boot splash title screen during `Platform_NetworkInit` (status log scrolls below)
+- [x] Boot UX module (`BootUX.c`) — splash, storage/network summary, status line, loading transition
+- [x] Dreamcast launcher main menu — console layout (Play solo / Multiplayer / Splitscreen)
+- [x] Direct connect screen titled "Multiplayer" with hints and skip-modem option
 - [x] PT command list preallocation raised to 2048×3 (direct-list hot path)
 - [x] `launcher-dc-skipmodem` option skips modem after options load (`Platform_NetworkInit`)
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)

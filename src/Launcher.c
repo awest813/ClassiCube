@@ -228,7 +228,11 @@ static void Launcher_Init(void) {
 
 void Launcher_Setup(void) {
 	static const cc_string title = String_FromConst(GAME_APP_TITLE);
+#ifdef CC_BUILD_DREAMCAST
+	Window_Create2D(640, 480);
+#else
 	Window_Create2D(640, 400);
+#endif
 #ifdef CC_BUILD_MOBILE
 	Window_LockLandscapeOrientation(Options_GetBool(OPT_LANDSCAPE_MODE, false));
 #endif
@@ -263,8 +267,10 @@ void Launcher_Setup(void) {
 	Launcher_TryLoadTexturePack();
 
 	Http_Component.Init();
+#ifndef CC_BUILD_DREAMCAST
 #ifdef CC_BUILD_NETWORKING
 	CheckUpdateTask_Run();
+#endif
 #endif
 
 #ifdef CC_BUILD_RESOURCES

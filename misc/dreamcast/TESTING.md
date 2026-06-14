@@ -37,6 +37,9 @@ On real hardware, use a Dreamcast serial cable or coders cable with `dc-tool -x`
 | Serial log | Enable SH4 serial / stdout in emulator | Boot messages visible, no crash spam |
 | Single-player | Start local game | World loads, movement and block place/break work |
 | Direct connect | Enter IP:port on DC connect screen | Joins server or shows dialog on failure |
+| Return to menu | Pause → Exit to menu, or disconnect → Back to menu | Returns to launcher (not full quit) |
+| First-run welcome | Delete `launcher-dc-welcomed` from options | Welcome dialog on main menu |
+| Splitscreen | Launcher → Splitscreen → 2–4 players | Correct player count, controller hint shown |
 | Multi-controller | Map 2+ virtual controllers to ports A-D | All connected pads respond (see gamepad fix) |
 | Error dialog | Trigger connection failure | On-screen dialog appears (not just serial log) |
 | Audio | Enable sounds + music | Both play; no hang or divide-by-zero |
@@ -77,6 +80,16 @@ Verify these specifically after code changes:
 16. **VMU any slot** — Options load/save on VMU in any maple port/slot
 17. **Selection box edges** — Multiplayer selection regions show wireframe edges (KOS pvrline path)
 18. **Multi-stream audio** — Music + SFX concurrently without stalling (all streams polled each frame)
+19. **Skip-modem option** — Set `launcher-dc-skipmodem=true` in options.txt; boot skips modem dial
+21. **Boot on-screen log** — Modem/SD/BBA status visible on CRT during init (before launcher)
+23. **Split-screen scissor** — Viewport clip resets each 3D frame; no bleed from prior player region
+24. **Keyboard unplug** — Disconnecting maple keyboard releases held keys
+25. **Spawn bind** — Set spawn is B+START; START alone sends chat
+27. **Coloured direct PT** — Map overlay / coloured UI quads use store-queue direct path
+28. **Line batching** — Selection box edges deferred to OP list (no PT list interruption)
+31. **Boot UX overhaul** — Blue splash, storage/network lines, live status, loading transition
+32. **Console main menu** — No web login; Play solo / Multiplayer / Splitscreen / Options / Exit
+33. **Multiplayer screen** — Renamed title, connect hint, controller help on main menu
 
 ## Known Limitations (not test failures)
 

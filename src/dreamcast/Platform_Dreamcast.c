@@ -10,6 +10,8 @@
 #include "../Utils.h"
 #include "../Errors.h"
 #include "../SystemFonts.h"
+#include "../Constants.h"
+#include "BootUX.h"
 
 #include <errno.h>
 #include <netdb.h>
@@ -24,6 +26,7 @@
 #include <sys/stat.h>
 #include <ppp/ppp.h>
 #include <kos.h>
+#include <dc/sq.h>
 #include <dc/sd.h>
 #include <fat/fs_fat.h>
 #include <kos/dbgio.h>
@@ -90,53 +93,26 @@ cc_uint64 Stopwatch_Measure(void) {
 	return timer_us_gettime64();
 }
 
-static uint32 str_offset;
 static cc_bool log_debugger  = true;
-static cc_bool log_timestamp = true;
 extern cc_bool window_inited;
 
-#define MAX_ONSCREEN_LINES 17
-#define ONSCREEN_LINE_HEIGHT (24 + 2) // 8 * 3 text, plus 2 pixel padding
-#define Onscreen_LineOffset(y) ((y) * vid_mode->width)
-
-struct LogPosition { int x, y; };
-static void PlotOnscreen(int x, int y, void* ctx) {
-	struct LogPosition* pos = ctx;
-
-	x += pos->x;
-	if (x >= vid_mode->width) return;
-	y += pos->y;
-	
-	uint32 line_offset = Onscreen_LineOffset(y);
-	vram_s[line_offset + x] = 0xFFFF;
+static void BootUX_UpdateStorageLine(void) {
+	if (usingSD)
+		BootUX_SetStorage("Storage: SD card (/sd/ClassiCube/)");
+	else if (!Platform_ReadonlyFilesystem)
+		BootUX_SetStorage("Storage: writable");
+	else
+		BootUX_SetStorage("Storage: CD only - insert SD to save");
 }
 
-static void LogOnscreen(const char* msg, int len) {
-	char buffer[50];
-	cc_string str;
-	uint32 secs, ms;
-	timer_ms_gettime(&secs, &ms);
-	
-	String_InitArray(str, buffer);
-	if (log_timestamp) String_Format2(&str, "[%p2.%p3] ", &secs, &ms);
-	String_AppendAll(&str, msg, len);
-
-	struct LogPosition pos;
-	pos.x =  0;
-	pos.y = 10 + (str_offset * ONSCREEN_LINE_HEIGHT);
-
-	str_offset = (str_offset + 1) % MAX_ONSCREEN_LINES;
-
-	uint16_t* dst  = vram_s + Onscreen_LineOffset(pos.y);
-	int num_pixels = ONSCREEN_LINE_HEIGHT * 2 * vid_mode->width;
-	for (int i = 0; i < num_pixels; i++) dst[i] = 0;
-	//sq_set16(vram_s + Onscreen_LineOffset(pos.y), 0, ONSCREEN_LINE_HEIGHT * 2 * vid_mode->width);
-	
-	for (int i = 0; i < str.length; i++)
-	{
-		pos.x += FallbackFont_Plot((cc_uint8)str.buffer[i], PlotOnscreen, 3, &pos);
-	}
+static void BootUX_UpdateNetworkLine(void) {
+	if (net_default_dev)
+		BootUX_SetNetwork("Network: Broadband adapter");
+	else
+		BootUX_SetNetwork("Network: Dreamcast modem");
 }
+
+static cc_bool log_timestamp = true;
 
 void Platform_Log(const char* msg, int len) {
 	if (log_debugger) {
@@ -145,9 +121,7 @@ void Platform_Log(const char* msg, int len) {
 	}
 	
 	if (window_inited) return;
-	// Log details on-screen for initial modem initing etc
-	//  (this can take around 40 seconds on average)
-	LogOnscreen(msg, len);
+	BootUX_Log(msg, len);
 }
 
 TimeMS DateTime_CurrentUTC(void) {
@@ -330,9 +304,13 @@ static int VMUFile_Do(cc_file* file, int mode) {
 	if (fd >= 0) {
 		len  = fs_total(fd);
 		data = Mem_Alloc(len, 1, "VMU data");
-		fs_read(fd, data, len);
-		
-		err = vmu_pkg_parse(data, len, &pkg);
+		if (fs_read(fd, data, len) != len) {
+			Mem_Free(data);
+			data = NULL;
+			err  = -1;
+		} else {
+			err = vmu_pkg_parse(data, len, &pkg);
+		}
 		fs_close(fd);
 	}
 	
@@ -799,26 +777,34 @@ static void TryInitSDCard(void) {
 
 static void InitModem(void) {
 	int err;
+	BootUX_SetStatus("Initialising modem..");
 	Platform_LogConst("Initialising modem..");
 	
 	if (!modem_init()) {
+		BootUX_SetStatus("Modem unavailable - offline mode");
 		Platform_LogConst("Modem init failed - continuing offline"); return;
 	}
 	ppp_init();
 	
+	BootUX_SetStatus("Dialling ISP (~20 seconds)..");
 	Platform_LogConst("Dialling modem.. (can take ~20 seconds)");
 	err = ppp_modem_init("111111111111", 1, NULL);
 	if (err) {
+		BootUX_SetStatus("Modem dial failed - offline mode");
 		Platform_Log1("Modem link failed (%i) - continuing offline", &err); return;
 	}
 
 	ppp_set_login("dream", "dreamcast");
 
+	BootUX_SetStatus("Connecting PPP (~20 seconds)..");
 	Platform_LogConst("Connecting link.. (can take ~20 seconds)");
 	err = ppp_connect();
 	if (err) {
+		BootUX_SetStatus("PPP failed - offline mode");
 		Platform_Log1("PPP connect failed (%i) - continuing offline", &err); return;
  	}
+	BootUX_SetStatus("Modem connected");
+	BootUX_SetNetwork("Network: Modem (online)");
 	Platform_LogConst("Modem connected");
 }
 
@@ -836,12 +822,13 @@ static cc_bool StartHeldOnPorts(void) {
 }
 
 static void WaitToStart(void) {
-	Platform_LogConst("Press START to continue (or wait 3 seconds)..");
+	BootUX_SetStatus("Press START to continue");
 
 	for (int i = 0; i < 30; i++)
 	{
 		if (StartHeldOnPorts()) return;
 		Thread_Sleep(100);
+		BootUX_Tick();
 	}
 }
 
@@ -854,16 +841,52 @@ void Platform_Init(void) {
 		Platform_LogConst("Broadband adapter detected");
 	}
 	TryInitSDCard();
+}
 
-	if (net_default_dev) return;
-	if (usingSD) {
+void Platform_NetworkInit(void) {
+	BootUX_ShowSplash();
+	BootUX_UpdateStorageLine();
+	BootUX_UpdateNetworkLine();
+	BootUX_SetStatus("Checking network..");
+
+	if (net_default_dev) {
+		BootUX_SetStatus("Broadband ready");
+		BootUX_ShowLoading();
+		return;
+	}
+
+	if (Options_GetBool("launcher-dc-skipmodem", false)) {
+		BootUX_SetStatus("Modem skipped (option)");
+		BootUX_SetNetwork("Network: Offline");
+		Platform_LogConst("launcher-dc-skipmodem set - skipping modem init");
+	} else if (usingSD) {
+		BootUX_SetStatus("SD boot - modem skipped");
+		BootUX_SetNetwork("Network: Offline");
 		Platform_LogConst("SD card ready - skipping modem init");
 	} else if (StartHeldOnPorts()) {
+		BootUX_SetStatus("START held - modem skipped");
+		BootUX_SetNetwork("Network: Offline");
 		Platform_LogConst("START held - skipping modem init");
 	} else {
 		InitModem();
 	}
 	WaitToStart();
+	BootUX_ShowLoading();
+}
+void Platform_GetLauncherStatus(cc_string* storage, cc_string* network) {
+	if (usingSD) {
+		String_AppendConst(storage, "SD card (/sd/ClassiCube/)");
+	} else if (Platform_ReadonlyFilesystem) {
+		String_AppendConst(storage, "CD (read only)");
+	} else {
+		String_AppendConst(storage, "Writable storage");
+	}
+
+	if (net_default_dev) {
+		String_AppendConst(network, "Broadband adapter");
+	} else {
+		String_AppendConst(network, "Modem or offline");
+	}
 }
 void Platform_Free(void) {
 	SyncSDCard();

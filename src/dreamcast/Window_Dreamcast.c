@@ -49,6 +49,9 @@ void Window_Free(void) { }
 
 void Window_Create2D(int width, int height) { 
 	Window_Main.Is3D = false;
+#ifdef CC_BUILD_DREAMCAST
+	pvr_wait_ready();
+#endif
 }
 
 void Window_Create3D(int width, int height) { 
@@ -160,6 +163,26 @@ static void UpdateKeyboardState(int port, kbd_state_t* state) {
 	prev_modifiers[port] = state->last_modifiers;
 }
 
+static void ClearKeyboardPort(int port) {
+	kbd_mods_t mods = prev_modifiers[port];
+
+	if (mods.raw & KBD_MOD_LALT)   Input_Set(CCKEY_LALT,   false);
+	if (mods.raw & KBD_MOD_RALT)   Input_Set(CCKEY_RALT,   false);
+	if (mods.raw & KBD_MOD_LCTRL)  Input_Set(CCKEY_LCTRL,  false);
+	if (mods.raw & KBD_MOD_RCTRL)  Input_Set(CCKEY_RCTRL,  false);
+	if (mods.raw & KBD_MOD_LSHIFT) Input_Set(CCKEY_LSHIFT, false);
+	if (mods.raw & KBD_MOD_RSHIFT) Input_Set(CCKEY_RSHIFT, false);
+
+	for (int i = KBD_KEY_A; i < KBD_KEY_S3; i++)
+	{
+		if (!prev_states[port][i].is_down) continue;
+		int btn = MapKey(i);
+		if (btn) Input_Set(btn, false);
+	}
+	Mem_Set(prev_states[port], 0, sizeof(prev_states[port]));
+	prev_modifiers[port].raw = 0;
+}
+
 static void ProcessKeyboardInput(void) {
 	maple_device_t* kb_dev;
 	kbd_state_t* state;
@@ -169,9 +192,17 @@ static void ProcessKeyboardInput(void) {
 	for (int p = 0; p < 4; p++)
 	{
 		kb_dev = maple_enum_type(p, MAPLE_FUNC_KEYBOARD);
-		if (!kb_dev) { has_prevState[p] = false; continue; }
+		if (!kb_dev) {
+			if (has_prevState[p]) ClearKeyboardPort(p);
+			has_prevState[p] = false;
+			continue;
+		}
 		state  = (kbd_state_t*)maple_dev_status(kb_dev);
-		if (!state)  { has_prevState[p] = false; continue; }
+		if (!state)  {
+			if (has_prevState[p]) ClearKeyboardPort(p);
+			has_prevState[p] = false;
+			continue;
+		}
 
 		if (primary < 0) primary = p;
 		/* Only one keyboard drives global key state (multi-keyboard setups are rare) */
@@ -181,7 +212,11 @@ static void ProcessKeyboardInput(void) {
 		has_prevState[p] = true;
 		found = true;
 	}
-	if (found) Input.Sources |= INPUT_SOURCE_NORMAL;
+	if (found) {
+		Input.Sources |= INPUT_SOURCE_NORMAL;
+	} else {
+		Input.Sources &= ~INPUT_SOURCE_NORMAL;
+	}
 
 	for (int p = 0; p < 4; p++)
 	{
@@ -244,7 +279,7 @@ static const BindMapping defaults_dc[BIND_COUNT] = {
 	[BIND_LEFT]         = { CCPAD_LEFT  },  
 	[BIND_RIGHT]        = { CCPAD_RIGHT },
 	[BIND_JUMP]         = { CCPAD_1     },
-	[BIND_SET_SPAWN]    = { CCPAD_START }, 
+	[BIND_SET_SPAWN]    = { CCPAD_2, CCPAD_START },
 	[BIND_CHAT]         = { CCPAD_4     },
 	[BIND_INVENTORY]    = { CCPAD_3     },
 	[BIND_SEND_CHAT]    = { CCPAD_START },
@@ -293,11 +328,12 @@ static void HandleButtons(int port, int mods) {
 	Gamepad_SetButton(port, CCPAD_CDOWN,   mods & CONT_DPAD2_DOWN);
 }
 
-#define AXIS_SCALE 8.0f
+#define AXIS_DEADZONE 12
+#define AXIS_SCALE    9.0f
 static void HandleJoystick(int port, int axis, int x, int y, float delta) {
-	if (Math_AbsI(x) <= 8) x = 0;
-	if (Math_AbsI(y) <= 8) y = 0;	
-	
+	if (Math_AbsI(x) <= AXIS_DEADZONE) x = 0;
+	if (Math_AbsI(y) <= AXIS_DEADZONE) y = 0;
+
 	Gamepad_SetAxis(port, axis, x / AXIS_SCALE, y / AXIS_SCALE, delta);
 }
 
@@ -366,8 +402,6 @@ void Window_AllocFramebuffer(struct Bitmap* bmp, int width, int height) {
 }
 
 void Window_DrawFramebuffer(Rect2D r, struct Bitmap* bmp) {
-	vid_waitvbl();
-
 	for (int y = r.y; y < r.y + r.height; y++)
 	{
 		BitmapCol* src = Bitmap_GetRow(bmp, y);

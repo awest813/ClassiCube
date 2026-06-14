@@ -528,7 +528,11 @@ static void PauseScreen_ContextRecreated(void* screen) {
 	struct FontDesc titleFont;
 	PauseScreenBase_ContextRecreated(s, &titleFont);
 
+#ifdef CC_BUILD_DREAMCAST
+	ButtonWidget_SetConst(&s->quit, "Exit to menu", &titleFont);
+#else
 	ButtonWidget_SetConst(&s->quit, "Quit game", &titleFont);
+#endif
 	PauseScreen_CheckHacksAllowed(s);
 	Font_Free(&titleFont);
 }
@@ -543,6 +547,14 @@ static void PauseScreen_Layout(void* screen) {
 
 static void PauseScreen_Init(void* screen) {
 	struct PauseScreen* s = (struct PauseScreen*)screen;
+#ifdef CC_BUILD_DREAMCAST
+	static const struct SimpleButtonDesc descs[] = {
+		{ -160,  -50, "Options...",             Menu_SwitchOptions   },
+		{ -160,    0, "Change texture pack...", Menu_SwitchTexPacks  },
+		{  160,  -50, "Generate new level...",  Menu_SwitchGenLevel  },
+		{  160,    0, "Save level...",          Menu_SwitchSaveLevel }
+	};
+#else
 	static const struct SimpleButtonDesc descs[] = {
 		{ -160,  -50, "Options...",             Menu_SwitchOptions   },
 		{ -160,    0, "Change texture pack...", Menu_SwitchTexPacks  },
@@ -551,6 +563,7 @@ static void PauseScreen_Init(void* screen) {
 		{  160,    0, "Load level...",          Menu_SwitchLoadLevel },
 		{  160,   50, "Save level...",          Menu_SwitchSaveLevel }
 	};
+#endif
 
 	s->widgets     = pause_widgets;
 	s->numWidgets  = 0;
@@ -565,8 +578,12 @@ static void PauseScreen_Init(void* screen) {
 	s->maxVertices = Screen_CalcDefaultMaxVertices(s);
 
 	if (Server.IsSinglePlayer) return;
+#ifdef CC_BUILD_DREAMCAST
+	s->btns[2].flags = WIDGET_FLAG_DISABLED;
+#else
 	s->btns[3].flags = WIDGET_FLAG_DISABLED;
 	s->btns[4].flags = WIDGET_FLAG_DISABLED;
+#endif
 }
 
 static void PauseScreen_Free(void* screen) {

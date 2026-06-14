@@ -3,9 +3,8 @@
  * See misc/dreamcast/KOS_ATTRIBUTION.txt */
 #include "PVR_Line.h"
 
-void PVR_Line_Draw(vec3f_t* v1, vec3f_t* v2, float width, int color,
-	pvr_list_t which_list, pvr_poly_hdr_t* which_hdr) {
-	pvr_vertex_t __attribute__((aligned(32))) line_verts[4];
+static void BuildLineVerts(pvr_vertex_t* line_verts, vec3f_t* v1, vec3f_t* v2,
+	float width, int color) {
 	pvr_vertex_t* vert = line_verts;
 	vec3f_t *ov1, *ov2;
 	float dx, dy, inverse_magnitude, nx, ny;
@@ -36,7 +35,18 @@ void PVR_Line_Draw(vec3f_t* v1, vec3f_t* v2, float width, int color,
 	vert->x = ov1->x - nx; vert->y = ov1->y - ny; vert->z = ov2->z; vert++;
 	vert->x = ov2->x + nx; vert->y = ov2->y + ny; vert->z = ov1->z; vert++;
 	vert->x = ov2->x - nx; vert->y = ov2->y - ny; vert->z = ov2->z;
+}
 
+void PVR_Line_BuildVerts(pvr_vertex_t* line_verts, vec3f_t* v1, vec3f_t* v2,
+	float width, int color) {
+	BuildLineVerts(line_verts, v1, v2, width, color);
+}
+
+void PVR_Line_Draw(vec3f_t* v1, vec3f_t* v2, float width, int color,
+	pvr_list_t which_list, pvr_poly_hdr_t* which_hdr) {
+	pvr_vertex_t __attribute__((aligned(32))) line_verts[4];
+
+	PVR_Line_BuildVerts(line_verts, v1, v2, width, color);
 	pvr_list_prim(which_list, which_hdr, sizeof(pvr_poly_hdr_t));
 	pvr_list_prim(which_list, &line_verts, 4 * sizeof(pvr_vertex_t));
 }

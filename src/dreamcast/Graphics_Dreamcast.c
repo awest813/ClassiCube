@@ -130,9 +130,9 @@ static void InitGLState(void) {
 	listPT.list_type = PVR_LIST_PT_POLY;
 	listTR.list_type = PVR_LIST_TR_POLY;
 
-	CommandsList_Reserve(&listOP, 1024 * 3);
-	CommandsList_Reserve(&listPT,  512 * 3);
-	CommandsList_Reserve(&listTR, 1024 * 3);
+	CommandsList_Reserve(&listOP, 2048 * 3);
+	CommandsList_Reserve(&listPT, 2048 * 3);
+	CommandsList_Reserve(&listTR, 2048 * 3);
 }
 
 static void InitTexMemory(void);
@@ -159,6 +159,9 @@ cc_bool Gfx_TryRestoreContext(void) {
 
 void Gfx_Free(void) {
 	Gfx_FreeState();
+#ifdef CC_BUILD_DREAMCAST
+	pvr_wait_ready();
+#endif
 }
 
 
@@ -535,7 +538,10 @@ void Gfx_UpdateTexture(GfxResourceID texId, int originX, int originY, struct Bit
 }
 
 void Gfx_BindTexture(GfxResourceID texId) {
-	tex_active = (struct GPUTexture*)texId;
+	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	if (tex_active == tex) return;
+
+	tex_active = tex;
 	stateDirty = true;
 }
 
@@ -851,6 +857,10 @@ static matrix_t CC_ALIGNED(32) mat_vp;
 static float textureOffsetX, textureOffsetY;
 static int textureOffset;
 
+/* Applied in SH4 asm textured vertex loaders (TransformDirect.S / TransformFast.S) */
+float Gfx_DC_TextureOffU;
+float Gfx_DC_TextureOffV;
+
 void Gfx_LoadMatrix(MatrixType type, const struct Matrix* matrix) {
 	if (type == MATRIX_PROJ) memcpy(&_proj, matrix, sizeof(struct Matrix));
 	if (type == MATRIX_VIEW) memcpy(&_view, matrix, sizeof(struct Matrix));
@@ -878,21 +888,13 @@ void Gfx_DisableTextureOffset(void) {
 	textureOffset  = false;
 }
 
-static CC_NOINLINE void ShiftTextureCoords(int count) {
-	for (int i = 0; i < count; i++) 
-	{
-		struct VertexTextured* v = (struct VertexTextured*)gfx_vertices + i;
-		v->U += textureOffsetX;
-		v->V += textureOffsetY;
-	}
-}
-
-static CC_NOINLINE void UnshiftTextureCoords(int count) {
-	for (int i = 0; i < count; i++) 
-	{
-		struct VertexTextured* v = (struct VertexTextured*)gfx_vertices + i;
-		v->U -= textureOffsetX;
-		v->V -= textureOffsetY;
+static void ApplyTextureOffsetGlobals(void) {
+	if (textureOffset) {
+		Gfx_DC_TextureOffU = textureOffsetX;
+		Gfx_DC_TextureOffV = textureOffsetY;
+	} else {
+		Gfx_DC_TextureOffU = 0.0f;
+		Gfx_DC_TextureOffV = 0.0f;
 	}
 }
 
@@ -921,6 +923,7 @@ extern Vertex* DrawColouredQuads_Fast(const void* src, Vertex* dst, int numQuads
 extern Vertex* DrawTexturedQuads_Fast(const void* src, Vertex* dst, int numQuads);
 
 extern void DrawTexturedQuads_Direct(const void* src, int dst, int numQuads);
+extern void DrawColouredQuads_Direct(const void* src, int dst, int numQuads);
 
 static Vertex* ReserveOutput(struct CommandsList* list, cc_uint32 elems) {
 	Vertex* beg;
@@ -944,21 +947,38 @@ static void DrawQuads(int count, void* src, DrawHints hints) {
 	cc_bool noclip = (hints & DRAW_HINT_NOCLIP) || gfx_rendering2D;
 	cc_uint32 header_required = (list->length == 0) || stateDirty;
 
-	if (gfx_format == VERTEX_FORMAT_TEXTURED && list == direct && noclip) {
+	ApplyTextureOffsetGlobals();
+
+	if (list == direct && noclip) {
 		struct pvr_poly_hdr_t hdr;
 
-		if (header_required) {
-			BuildPolyContext(&hdr, list->list_type);
-			SubmitCommands((Vertex*)&hdr, 1);
-			stateDirty = false;
-		}
-		if (list->length) {
-			SubmitCommands((Vertex*)list->data, list->length);
-			list->length = 0;
+		if (gfx_format == VERTEX_FORMAT_TEXTURED) {
+			if (header_required) {
+				BuildPolyContext(&hdr, list->list_type);
+				SubmitCommands((Vertex*)&hdr, 1);
+				stateDirty = false;
+			}
+			if (list->length) {
+				SubmitCommands((Vertex*)list->data, list->length);
+				list->length = 0;
+			}
+			DrawTexturedQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
+			return;
 		}
 
-		DrawTexturedQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
-		return;
+		if (gfx_format == VERTEX_FORMAT_COLOURED) {
+			if (header_required) {
+				BuildPolyContext(&hdr, list->list_type);
+				SubmitCommands((Vertex*)&hdr, 1);
+				stateDirty = false;
+			}
+			if (list->length) {
+				SubmitCommands((Vertex*)list->data, list->length);
+				list->length = 0;
+			}
+			DrawColouredQuads_Direct(src, MEM_AREA_SQ_BASE, count >> 2);
+			return;
+		}
 	}
 
 	// Reserve room for the vertices and header
@@ -996,15 +1016,7 @@ void Gfx_SetVertexFormat(VertexFormat fmt) {
 }
 
 static void ProjectToScreen(const struct VertexColoured* in, vec3f_t* out) {
-	matrix_t saved;
-	mat_store(&saved);
-
-	mat_load(&mat_vp);
-	mat_apply(&_proj);
-	mat_apply(&_view);
 	mat_trans_point3(out, in->x, in->y, in->z);
-
-	mat_load(&saved);
 }
 
 static int PackedCol_ToPVR(PackedCol col) {
@@ -1016,19 +1028,23 @@ static int PackedCol_ToPVR(PackedCol col) {
 
 void Gfx_DrawVb_Lines(int verticesCount) {
 	struct VertexColoured* src;
-	pvr_poly_cxt_t cxt;
 	pvr_poly_hdr_t hdr;
+	pvr_vertex_t lineVerts[4];
 	vec3f_t v1, v2;
+	matrix_t saved;
 	int lineCount;
 
 	if (!verticesCount || renderingDisabled) return;
 	lineCount = verticesCount >> 1;
 	if (!lineCount) return;
 
-	pvr_poly_cxt_col(&cxt, PVR_LIST_OP_POLY);
-	if (gfx_depthTest)  cxt.depth.comparison = PVR_DEPTHCMP_GEQUAL;
-	if (gfx_depthWrite) cxt.depth.write      = PVR_DEPTHWRITE_ENABLE;
-	pvr_poly_compile(&hdr, &cxt);
+	mat_store(&saved);
+	mat_load(&mat_vp);
+	mat_apply(&_proj);
+	mat_apply(&_view);
+
+	BuildPolyContext(&hdr, PVR_LIST_OP_POLY);
+	CommandsList_Append(&listOP, &hdr);
 
 	src = (struct VertexColoured*)gfx_vertices;
 	for (int i = 0; i < lineCount; i++) {
@@ -1037,9 +1053,14 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 
 		ProjectToScreen(a, &v1);
 		ProjectToScreen(b, &v2);
-		PVR_Line_Draw(&v1, &v2, 1.0f, PackedCol_ToPVR(a->Col),
-			PVR_LIST_OP_POLY, &hdr);
+		PVR_Line_BuildVerts(lineVerts, &v1, &v2, 1.0f, PackedCol_ToPVR(a->Col));
+
+		CommandsList_Append(&listOP, &lineVerts[0]);
+		CommandsList_Append(&listOP, &lineVerts[1]);
+		CommandsList_Append(&listOP, &lineVerts[2]);
+		CommandsList_Append(&listOP, &lineVerts[3]);
 	}
+	mat_load(&saved);
 }
 
 void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints hints) {
@@ -1054,9 +1075,7 @@ void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints 
 }
 
 void Gfx_DrawVb_IndexedTris(int verticesCount) {
-	if (textureOffset) ShiftTextureCoords(verticesCount);
 	DrawQuads(verticesCount, gfx_vertices, 0);
-	if (textureOffset) UnshiftTextureCoords(verticesCount);
 }
 
 void Gfx_DrawIndexedTris_T2fC4b(int verticesCount, int startVertex, DrawHints hints) {
@@ -1132,6 +1151,8 @@ static void FinishList(void) {
 	pvr_list_finish();
 }
 
+static void SubmitScissorCommand(int x, int y, int w, int h);
+
 void Gfx_BeginFrame(void) {
 	ApplyBgColor();
 	listOP.length = 0;
@@ -1139,6 +1160,8 @@ void Gfx_BeginFrame(void) {
 	listPT.length = 0;
 	gfx_scissor   = false;
 	stateDirty    = true;
+	/* Reset TA clip from prior split-screen viewport */
+	SubmitScissorCommand(0, 0, Game.Width, Game.Height);
 
 	pvr_scene_begin();
 	// Directly render PT list, buffer other lists first
@@ -1172,6 +1195,7 @@ void Gfx_EndFrame(void) {
 
 void Gfx_OnWindowResize(void) {
 	Gfx_SetViewport(0, 0, Game.Width, Game.Height);
+	Gfx_SetScissor(0, 0, Game.Width, Game.Height);
 }
 
 void Gfx_SetViewport(int x, int y, int w, int h) {

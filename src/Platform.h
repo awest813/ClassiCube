@@ -44,6 +44,12 @@ CC_API void Platform_DecodePath(cc_string* dst, const cc_filepath* path);
 
 /* Initialises the platform specific state. */
 void Platform_Init(void);
+#ifdef CC_BUILD_DREAMCAST
+/* Deferred network init (modem/BBA) after options are loaded. */
+void Platform_NetworkInit(void);
+/* Storage/network summary for the launcher main menu. */
+void Platform_GetLauncherStatus(cc_string* storage, cc_string* network);
+#endif
 /* Frees the platform specific state. */
 void Platform_Free(void);
 /* Sets the appropriate default current/working directory. */

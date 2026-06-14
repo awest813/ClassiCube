@@ -71,7 +71,11 @@ void VirtualDialog_Show(const char* title, const char* msg, cc_bool oneshot) {
 	Context2D_Clear(&ctx, BitmapCol_Make(30, 30, 30, 255),
 					0, 0, bmp.width, bmp.height);
 
+#ifdef CC_BUILD_DREAMCAST
+	const char* ipt_msg = "Press A, B, or START to continue";
+#else
 	const char* ipt_msg = "Press any button to continue (or wait 5 seconds)";
+#endif
 	vd_close = false;
 
 	vd_lineSpace = 20 * DisplayInfo.ScaleY;

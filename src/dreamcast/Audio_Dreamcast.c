@@ -75,6 +75,22 @@ static void* AudioCallback(snd_stream_hnd_t hnd, int smp_req, int *smp_recv) {
 
 	buf      = &ctx->bufs[ctx->bufHead];
 	samples  = min(buf->bytesLeft, smp_req);
+	/* KOS snd_stream DMA expects 4-byte aligned lengths (16-bit stereo frames) */
+	if (samples >= 4) {
+		samples &= ~3;
+	} else if (buf->bytesLeft > 0) {
+		/* Discard partial frame at buffer end */
+		buf->bytesLeft = 0;
+		buf->samples   = NULL;
+		buf->available = true;
+		ctx->bufHead   = (ctx->bufHead + 1) % ctx->count;
+		*smp_recv = 0;
+		return NULL;
+	}
+	if (!samples) {
+		*smp_recv = 0;
+		return NULL;
+	}
 	*smp_recv = samples;
 	void* ptr = buf->samples;
 
@@ -156,7 +172,7 @@ cc_result Audio_Poll(struct AudioContext* ctx, int* inUse) {
 
 	if (ctx->count && ctx->hnd >= 0 && ctx->hnd < SND_STREAM_MAX &&
 		valid_handles[ctx->hnd] == HANDLE_STATE_PLAYABLE)
-		PollAllStreams();
+		snd_stream_poll(ctx->hnd);
 
 	for (int i = 0; i < ctx->count; i++)
 	{

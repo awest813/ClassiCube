@@ -2,7 +2,7 @@
 
 ClassiCube’s Dreamcast build is **usable but not fully hardware-validated**: it boots, renders the world via the PVR2, supports multiplayer over the modem or broadband adapter, and can produce a `.cdi` in CI when KOS assets are present.
 
-**Status:** P0 stability fixes and P2 polish are **code-complete** on branch `cursor/dreamcast-p0-fixes-5f6d`. Remaining work is mostly **real-hardware / Flycast validation** (audio stress, split-screen, 30+ min sessions). See `TESTING.md` for the regression checklist.
+**Status:** P0 stability fixes and P2 polish are **code-complete** on `master` (through PR #3) plus follow-up branch `cursor/dreamcast-continue-5f6d`. Remaining work is mostly **real-hardware / Flycast validation** (audio stress, split-screen, 30+ min sessions). See `TESTING.md` for the regression checklist.
 
 ### Completed in this effort (code)
 
@@ -11,8 +11,8 @@ ClassiCube’s Dreamcast build is **usable but not fully hardware-validated**: i
 | Stability | Gamepad `continue` fix, socket `fcntl`, crash handler, thread create check |
 | Graphics | Clear color, scissor PT-list + disable reset, vsync, VRAM cap, line drawing, texture update guard |
 | Input | Per-port keyboard, all-port mouse, gamepad disconnect, button labels, bind fixes |
-| Platform | BBA+SD coexistence, SD sync batching, VMU any-slot, modem skip (SD / START), entropy |
-| Audio | Poll in `Audio_Poll`, callback buffer skip, `StreamContext_Pause` |
+| Platform | BBA+SD coexistence, SD sync batching, VMU any-slot, modem skip (SD / START / option), entropy, boot on-screen log |
+| Audio | Poll in `Audio_Poll`, callback buffer skip, `StreamContext_Pause`, multi-stream tick, DMA alignment |
 | UI | VirtualDialog, framebuffer `vid_flip` |
 | Build | `fetch-assets.sh`, `make dreamcast-assets`, CI asset fetch, Makefile checks |
 
@@ -139,7 +139,10 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] `Gfx_UpdateTexture` — PVR RAM from `pvr_mem_malloc` does not need CPU cache flush
 - [x] `Gfx_ClearBuffers` — applies background color when color buffer requested
 - [x] `Gfx_SetViewport` — loads viewport matrix to SH4 FPU for split-screen
-- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` example (`PVR_Line.c`, screen-space `frsqrt` expansion)
+- [x] Split-screen TA clip reset at `Gfx_BeginFrame` and `Gfx_OnWindowResize`
+- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` path; batched into OP list at frame end (no mid-frame TA interrupt)
+- [x] Coloured 2D quads use `DrawColouredQuads_Direct` (SH4 store queue, same as textured UI path)
+- [x] Texture atlas offset applied in asm (`Gfx_DC_TextureOffU/V`) — no per-draw VB mutation
 - [x] `Gfx_UpdateTexture` — guards against partial updates on paletted 4bpp textures
 
 ### Audio (`Audio_Dreamcast.c`)
@@ -156,7 +159,9 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] Gamepad button display names (A/B/X/Y, L/R) in controls UI
 - [x] Screenshot bind unbound (was conflicting with inventory on X)
 - [x] `CONT_D` no longer double-mapped to SELECT and CCPAD_7
-- [ ] Analog axis deadzone / scale (`AXIS_SCALE`, threshold 8) — verify on hardware and dual-analog sticks
+- [x] Analog axis deadzone / scale — tuned (deadzone 12, scale 9.0)
+- [x] `BIND_SET_SPAWN` moved to B+START chord (frees START for send-chat)
+- [x] Keyboard disconnect clears stuck key state
 - [x] `Window_DrawFramebuffer` — uses `vid_flip` after 2D draw for tear-free UI
 - [x] `Window_ShowDialog` — uses `VirtualDialog_Show`
 
@@ -165,6 +170,14 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] SD sync: batched via `MarkSDDirty` / `SyncSDCard` on `Platform_Free` (not per `File_Close`)
 - [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
 - [x] Skip modem dial when SD card mounted or START held at boot
+- [x] `launcher-dc-skipmodem` option + Direct connect checkbox
+- [x] Boot UX module (`BootUX.c`) — splash, storage/network summary, status line, loading transition
+- [x] Dreamcast launcher main menu — console layout (Play solo / Multiplayer / Splitscreen)
+- [x] Direct connect screen titled "Multiplayer" with hints and skip-modem option
+- [x] In-game return UX — pause "Exit to menu", disconnect "Back to menu", launcher 640×480
+- [x] First-run welcome dialog, splitscreen layout, connecting feedback, DC options screen
+- [x] PT command list preallocation raised to 2048×3 (direct-list hot path)
+- [x] `launcher-dc-skipmodem` option skips modem after options load (`Platform_NetworkInit`)
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)
 - [x] VMU save checks `fs_write` result
 - [x] `Directory_Enum` — `.` / `..` filtered (defensive, same as other ports)
@@ -202,14 +215,14 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Profile VRAM usage on large worlds — default view distance 64, cycle capped at 128, MAX_TEXTURE_COUNT 512
 - [x] Validate scissor (`Gfx_SetScissor`) — PT list clips submitted immediately; full-screen clip resets TA on disable
 - [x] Review fog table updates vs `gfx_fogEnabled` toggles
-- [x] `Gfx_DrawVb_Lines` — line pairs expanded to thin quads for selection box edges
+- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` path; poly header via `BuildPolyContext` (depth/scissor/fog)
 - [x] `Gfx_UpdateTexture` — guard against partial updates on paletted (4bpp) textures
 - [ ] Real-hardware comparison with Flycast for Z-fighting, sorting, and translucent water
 
 **Performance ideas (P3):**
 
 - [ ] Profile `TransformFast.S` vs `TransformClip.S` / `TransformDirect.S` paths
-- [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation (`CommandsList_Reserve`)
+- [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation — PT/OP/TR initial caps at 2048×3; TA buffer 32×50000
 - [ ] Consider PVR FSAA (`fsaa` flag currently `false`)
 - [ ] Document twiddle format differences vs Xbox/PS3 ports (see comments in those `Graphics_*.c` files)
 
@@ -220,14 +233,18 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Resolve thread-safety of `AudioBackend_Tick` vs main audio thread
 - [ ] Measure latency and buffer sizes (`AUDIO_MAX_BUFFERS`, `SND_STREAM_BUFFER_MAX`)
 - [x] `StreamContext_Pause` — implemented via `snd_stream_stop`
+- [x] `AudioBackend_Tick` polls all streams; per-context `Audio_Poll` polls one handle
+- [x] Callback returns 4-byte aligned sample lengths for KOS DMA
 
 ### 4. UI, storage & networking (P2)
 
 - [x] Implement `Window_ShowDialog` (modal message for errors / disconnect)
 - [x] Double-buffer 2D framebuffer blits to reduce menu tearing (`Window_DrawFramebuffer`)
 - [x] Batch SD writes (defer `fs_fat_sync` to `Platform_Free`)
-- [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
+- [x] Improve boot UX when no network device: START to skip wait, clearer offline messages, on-screen boot log
 - [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
+- [x] Deferred modem init (`Platform_NetworkInit` after `Options_Load`)
+- [x] Deferred modem init (`Platform_NetworkInit` after `Options_Load`)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention noted; init order fixed)
 - [x] `make dreamcast-assets` / `fetch-assets.sh` downloads texture + audio zips for CI and local builds
 
@@ -235,7 +252,7 @@ The backend is a full custom implementation (~1100 lines) with:
 
 Dreamcast defines `CC_BUILD_SPLITSCREEN` but split-screen needs verification:
 
-- [ ] Confirm launcher exposes split-screen entry where appropriate (`LScreens.c` / `Launcher.c` guards)
+- [ ] Confirm launcher exposes split-screen entry where appropriate (`LScreens.c` / `Launcher.c` guards) — button labelled "Splitscreen" on DC
 - [ ] Test 2–4 controllers with corrected `Gamepads_Process` loop
 - [x] Disconnect stale gamepad state when maple port goes empty
 - [ ] Verify `defaults_dc` bindings feel right (triggers = place/delete, face buttons = jump/chat/inventory)

@@ -18,8 +18,12 @@ See also:
 - PLAN.md    — port roadmap and known issues
 - TESTING.md — manual test checklist for emulator and hardware
 
-Direct connect screen options (persisted in options.txt):
+Dreamcast launcher:
+- Main menu: Play solo, Multiplayer, Splitscreen, Options, Exit
+- Multiplayer screen: direct IP connect + skip-modem checkbox
+- Boot: blue splash shows storage/network status before menu loads
 - launcher-dc-username
 - launcher-dc-ip
 - launcher-dc-port
 - launcher-dc-mppass (stored securely)
+- launcher-dc-skipmodem (skip ~40s modem dial on next boot; default false)

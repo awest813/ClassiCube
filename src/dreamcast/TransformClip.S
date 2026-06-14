@@ -47,6 +47,9 @@
 // =========================================================
 // ========================= VERTEX LOADING ================
 // =========================================================
+.extern _Gfx_DC_TextureOffU
+.extern _Gfx_DC_TextureOffV
+
 .macro LoadColouredVertex
 // LOAD XYZ
     fmov.s @SRC+, F_X // LS, X = src->x
@@ -79,6 +82,10 @@
     fmov.s @SRC+, F_C // LS, C = src->color
     fmov.s @SRC+, F_U // LS, U = src->u
     fmov.s @SRC+, F_V // LS, V = src->v
+    fmov.s @_Gfx_DC_TextureOffU, fr8
+    fadd   fr8, F_U
+    fmov.s @_Gfx_DC_TextureOffV, fr8
+    fadd   fr8, F_V
 .endm
 
 // =========================================================

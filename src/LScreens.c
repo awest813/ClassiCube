@@ -455,18 +455,34 @@ static struct DirectConnectScreen {
 	struct LButton btnConnect, btnBack;
 	struct LInput iptUsername, iptAddress, iptMppass;
 	struct LLabel lblStatus;
+#ifdef CC_BUILD_DREAMCAST
+	struct LCheckbox cbSkipModem;
+	struct LLabel lblHint;
+#endif
 } DirectConnectScreen CC_BIG_VAR;
 
-#define DIRECTCONNECT_SCREEN_MAXWIDGETS 6
+#define DIRECTCONNECT_SCREEN_MAXWIDGETS 8
 static struct LWidget* directConnect_widgets[DIRECTCONNECT_SCREEN_MAXWIDGETS];
 
 LAYOUTS dc_iptUsername[] = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE, -120 } };
 LAYOUTS dc_iptAddress[]  = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE,  -75 } };
 LAYOUTS dc_iptMppass[]   = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE,  -30 } };
 
-LAYOUTS dc_btnConnect[]  = { { ANCHOR_CENTRE, -110 }, { ANCHOR_CENTRE, 20 } };
+LAYOUTS dc_btnConnect[]  = { { ANCHOR_CENTRE, -110 }, { ANCHOR_CENTRE, 55 } };
 LAYOUTS dc_btnBack[]     = { { ANCHOR_CENTRE,  125 }, { ANCHOR_CENTRE, 20 } };
-LAYOUTS dc_lblStatus[]   = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 70 } };
+LAYOUTS dc_lblStatus[]   = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 95 } };
+#ifdef CC_BUILD_DREAMCAST
+LAYOUTS dc_cbSkipModem[] = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE, 15 } };
+LAYOUTS dc_lblHint[]     = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 130 } };
+LAYOUTS dc_main_lblInfo[]    = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE, -195 } };
+LAYOUTS dc_main_lblHint[]    = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  215 } };
+LAYOUTS dc_main_btnSPlayer[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE, -110 } };
+LAYOUTS dc_main_btnDirect[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  -55 } };
+LAYOUTS dc_main_btnSplit[]   = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,    0 } };
+LAYOUTS dc_main_btnOptions[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,   55 } };
+LAYOUTS dc_main_btnExit[]    = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  110 } };
+LAYOUTS dc_main_lblStatus[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  170 } };
+#endif
 
 
 static void DirectConnectScreen_UrlFilter(cc_string* str) {
@@ -478,6 +494,12 @@ static void DirectConnectScreen_UrlFilter(cc_string* str) {
 	LInput_SetString(&DirectConnectScreen.iptMppass,   &mppass);
 	str->length = 0;
 }
+
+#ifdef CC_BUILD_DREAMCAST
+static void DirectConnectScreen_ToggleSkipModem(struct LCheckbox* w) {
+	Options_SetBool("launcher-dc-skipmodem", w->value);
+}
+#endif
 
 static void DirectConnectScreen_StartClient(void* w) {
 	static const cc_string defMppass = String_FromConst("(none)");
@@ -520,18 +542,33 @@ static void DirectConnectScreen_StartClient(void* w) {
 		Options_SetSecure("launcher-dc-mppass", &mppass);
 	Options_ResumeSaving();
 
-	LLabel_SetConst(status, "");
-	Launcher_StartGame(&user, &mppass, &ip, &port, &String_Empty, 1);
+	LLabel_SetConst(status, "&eConnecting..");
+	LBackend_Redraw();
+	if (!Launcher_StartGame(&user, &mppass, &ip, &port, &String_Empty, 1)) {
+		LLabel_SetConst(status, "&cCould not start (try again)");
+		LBackend_Redraw();
+	}
 }
 
 static void DirectConnectScreen_Activated(struct LScreen* s_) {
 	struct DirectConnectScreen* s = (struct DirectConnectScreen*)s_;
 
+#ifdef CC_BUILD_DREAMCAST
+	LInput_Add(s,  &s->iptUsername, 330, "Player name..",            dc_iptUsername);
+	LInput_Add(s,  &s->iptAddress,  330, "Server IP:port..",         dc_iptAddress);
+	LInput_Add(s,  &s->iptMppass,   330, "Password (mppass)..",      dc_iptMppass);
+#else
 	LInput_Add(s,  &s->iptUsername, 330, "Username..",               dc_iptUsername);
 	LInput_Add(s,  &s->iptAddress,  330, "IP address:Port number..", dc_iptAddress);
 	LInput_Add(s,  &s->iptMppass,   330, "Mppass..",                 dc_iptMppass);
+#endif
+#ifdef CC_BUILD_DREAMCAST
+	LCheckbox_Add(s, &s->cbSkipModem, "Skip modem dial on next boot",
+				DirectConnectScreen_ToggleSkipModem, dc_cbSkipModem);
+	LLabel_Add(s,  &s->lblHint, "&7Connect to a Classicube server by IP", dc_lblHint);
+#endif
 
-	LButton_Add(s, &s->btnConnect, 110, 35, "Connect", 
+	LButton_Add(s, &s->btnConnect, 110, 35, "Connect",
 				DirectConnectScreen_StartClient, dc_btnConnect);
 	LButton_Add(s, &s->btnBack,     80, 35, "Back",    
 				SwitchToMain, dc_btnBack);
@@ -564,6 +601,9 @@ static void DirectConnectScreen_Load(struct LScreen* s_) {
 	LInput_SetText(&s->iptUsername, &user);
 	LInput_SetText(&s->iptAddress,  &addr);
 	LInput_SetText(&s->iptMppass,   &mppass);
+#ifdef CC_BUILD_DREAMCAST
+	LCheckbox_Set(&s->cbSkipModem, Options_GetBool("launcher-dc-skipmodem", false));
+#endif
 }
 
 void DirectConnectScreen_SetActive(void) {
@@ -575,7 +615,11 @@ void DirectConnectScreen_SetActive(void) {
 
 	s->Activated      = DirectConnectScreen_Activated;
 	s->LoadState      = DirectConnectScreen_Load;
+#ifdef CC_BUILD_DREAMCAST
+	s->title          = "Multiplayer";
+#else
 	s->title          = "Direct connect";
+#endif
 	s->onEnterWidget  = (struct LWidget*)&s->btnConnect;
 	s->onEscapeWidget = (struct LWidget*)&s->btnBack;
 
@@ -650,16 +694,26 @@ void MFAScreen_SetActive(void) {
 static struct SplitScreen {
 	LScreen_Layout
 	struct LButton btnPlayers[3], btnBack;
+#ifdef CC_BUILD_DREAMCAST
+	struct LLabel lblHint;
+#endif
 	cc_bool signingIn;
 } SplitScreen CC_BIG_VAR;
 
-#define SPLITSCREEN_MAX_WIDGETS 4
+#define SPLITSCREEN_MAX_WIDGETS 5
 static struct LWidget* split_widgets[SPLITSCREEN_MAX_WIDGETS];
 
 LAYOUTS sps_btnPlayers2[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE, -120 } };
 LAYOUTS sps_btnPlayers3[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  -70 } };
 LAYOUTS sps_btnPlayers4[] = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  -20 } };
 LAYOUTS sps_btnBack[]     = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  170 } };
+#ifdef CC_BUILD_DREAMCAST
+LAYOUTS dc_sps_btn2[]     = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  -90 } };
+LAYOUTS dc_sps_btn3[]     = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  -35 } };
+LAYOUTS dc_sps_btn4[]     = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,   20 } };
+LAYOUTS dc_sps_btnBack[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,   90 } };
+LAYOUTS dc_sps_lblHint[]  = { { ANCHOR_CENTRE, 0 }, { ANCHOR_CENTRE,  150 } };
+#endif
 
 static void SplitScreen_Start(int players) {
 	static const cc_string user = String_FromConst(DEFAULT_USERNAME);
@@ -673,15 +727,27 @@ static void SplitScreen_Players4(void* w) { SplitScreen_Start(4); }
 static void SplitScreen_Activated(struct LScreen* s_) {
 	struct SplitScreen* s = (struct SplitScreen*)s_;
 
+#ifdef CC_BUILD_DREAMCAST
+	LButton_Add(s, &s->btnPlayers[0], 260, 40, "2 players",
+				SplitScreen_Players2, dc_sps_btn2);
+	LButton_Add(s, &s->btnPlayers[1], 260, 40, "3 players",
+				SplitScreen_Players3, dc_sps_btn3);
+	LButton_Add(s, &s->btnPlayers[2], 260, 40, "4 players",
+				SplitScreen_Players4, dc_sps_btn4);
+	LButton_Add(s, &s->btnBack, 100, 35, "Back",
+				SwitchToMain, dc_sps_btnBack);
+	LLabel_Add(s,  &s->lblHint,
+		"&7Plug controllers into ports A-D", dc_sps_lblHint);
+#else
 	LButton_Add(s, &s->btnPlayers[0], 300, 35, "2 player splitscreen", 
 				SplitScreen_Players2, sps_btnPlayers2);
 	LButton_Add(s, &s->btnPlayers[1], 300, 35, "3 player splitscreen", 
 				SplitScreen_Players3, sps_btnPlayers3);
 	LButton_Add(s, &s->btnPlayers[2], 300, 35, "4 player splitscreen", 
 				SplitScreen_Players4, sps_btnPlayers4);
-
 	LButton_Add(s, &s->btnBack, 100, 35, "Back", 
 				SwitchToMain, sps_btnBack);
+#endif
 }
 
 void SplitScreen_SetActive(void) {
@@ -692,7 +758,11 @@ void SplitScreen_SetActive(void) {
 	s->maxWidgets = Array_Elems(split_widgets);
 
 	s->Activated     = SplitScreen_Activated;
+#ifdef CC_BUILD_DREAMCAST
+	s->title         = "Splitscreen";
+#else
 	s->title         = "Splitscreen mode";
+#endif
 
 	Launcher_SetScreen((struct LScreen*)s);
 }
@@ -710,10 +780,13 @@ static struct MainScreen {
 	struct LButton btnRegister, btnOptions, btnUpdates;
 	struct LInput iptUsername, iptPassword;
 	struct LLabel lblStatus, lblUpdate;
+#ifdef CC_BUILD_DREAMCAST
+	struct LLabel lblInfo, lblHint;
+#endif
 	cc_bool signingIn;
 } MainScreen CC_BIG_VAR;
 
-#define MAINSCREEN_MAX_WIDGETS 12
+#define MAINSCREEN_MAX_WIDGETS 13
 static struct LWidget* main_widgets[MAINSCREEN_MAX_WIDGETS];
 
 LAYOUTS main_iptUsername[] = { { ANCHOR_CENTRE_MIN, -140 }, { ANCHOR_CENTRE, -120 } };
@@ -849,6 +922,54 @@ static void MainScreen_ExitApp(void* w) {
 	Window_Main.Exists = false;
 }
 
+#ifdef CC_BUILD_DREAMCAST
+static void MainScreen_FillInfo_DC(struct MainScreen* s) {
+	cc_string storage, network, line;
+	char storageBuffer[80], networkBuffer[80], lineBuffer[160];
+
+	String_InitArray(storage, storageBuffer);
+	String_InitArray(network, networkBuffer);
+	String_InitArray(line, lineBuffer);
+	Platform_GetLauncherStatus(&storage, &network);
+	String_Format2(&line, "&eStorage: %s  |  Network: %s", &storage, &network);
+	LLabel_SetText(&s->lblInfo, &line);
+}
+
+static void MainScreen_Activated(struct LScreen* s_) {
+	struct MainScreen* s = (struct MainScreen*)s_;
+
+	LLabel_Add(s, &s->lblInfo, "", dc_main_lblInfo);
+	LButton_Add(s, &s->btnSPlayer, 260, 40, "Play solo",
+				MainScreen_Singleplayer, dc_main_btnSPlayer);
+	LButton_Add(s, &s->btnDirect, 260, 40, "Multiplayer",
+				SwitchToDirectConnect, dc_main_btnDirect);
+#ifdef CC_BUILD_SPLITSCREEN
+	LButton_Add(s, &s->btnSplit, 260, 40, "Splitscreen",
+				SwitchToSplitScreen, dc_main_btnSplit);
+#endif
+	LButton_Add(s, &s->btnOptions, 120, 35, "Options",
+				SwitchToSettings, dc_main_btnOptions);
+	LButton_Add(s, &s->btnUpdates, 120, 35, "Exit",
+				MainScreen_ExitApp, dc_main_btnExit);
+	LLabel_Add(s,  &s->lblStatus, "", dc_main_lblStatus);
+	LLabel_Add(s,  &s->lblHint, "&7D-pad: move   A: confirm   B: back", dc_main_lblHint);
+	MainScreen_FillInfo_DC(s);
+}
+
+static void MainScreen_Load(struct LScreen* s_) {
+	struct MainScreen* s = (struct MainScreen*)s_;
+	LLabel_SetConst(&s->lblStatus, "");
+
+	if (!Options_GetBool("launcher-dc-welcomed", false)) {
+		Window_ShowDialog("Welcome to ClassiCube",
+			"Play solo for local worlds.\n"
+			"Multiplayer joins Classicube servers.\n"
+			"Use an SD card in /sd/ClassiCube/ for saves.");
+		Options_SetBool("launcher-dc-welcomed", true);
+		Options_SaveIfChanged();
+	}
+}
+#else
 static void MainScreen_Activated(struct LScreen* s_) {
 	struct MainScreen* s = (struct MainScreen*)s_;
 
@@ -872,7 +993,12 @@ static void MainScreen_Activated(struct LScreen* s_) {
 	LButton_Add(s, &s->btnSPlayer, 200, 35, "Singleplayer",
 				MainScreen_Singleplayer, main_btnSPlayer);
 #ifdef CC_BUILD_SPLITSCREEN
-	LButton_Add(s, &s->btnSplit,   200, 35, "Splitscreen (WIP)", 
+	LButton_Add(s, &s->btnSplit,   200, 35,
+#ifdef CC_BUILD_DREAMCAST
+				"Splitscreen",
+#else
+				"Splitscreen (WIP)",
+#endif
 				SwitchToSplitScreen,     main_btnSplit);
 #endif
 
@@ -922,6 +1048,7 @@ static void MainScreen_Load(struct LScreen* s_) {
 	if (!user.length || !pass.length) return;
 	MainScreen_DoLogin();
 }
+#endif
 
 static void MainScreen_TickCheckUpdates(struct MainScreen* s) {
 	if (!CheckUpdateTask.Base.working)   return;
@@ -1004,11 +1131,13 @@ static void MainScreen_Tick(struct LScreen* s_) {
 	struct MainScreen* s = (struct MainScreen*)s_;
 	LScreen_Tick(s_);
 
+#ifndef CC_BUILD_DREAMCAST
 #ifdef CC_BUILD_NETWORKING
 	MainScreen_TickCheckUpdates(s);
 	MainScreen_TickGetToken(s);
 	MainScreen_TickSignIn(s);
 	MainScreen_TickFetchServers(s);
+#endif
 #endif
 }
 
@@ -1023,11 +1152,14 @@ void MainScreen_SetActive(void) {
 	s->LoadState     = MainScreen_Load;
 	s->Tick          = MainScreen_Tick;
 	s->title         = "ClassiCube";
+	s->onEnterWidget = (struct LWidget*)&s->btnSPlayer;
 
+#ifndef CC_BUILD_DREAMCAST
 #ifdef CC_BUILD_NETWORKING
 	s->onEnterWidget = (struct LWidget*)&s->btnLogin;
 #else
 	s->onEnterWidget = (struct LWidget*)&s->btnSPlayer;
+#endif
 #endif
 
 	Launcher_SetScreen((struct LScreen*)s);
@@ -1440,9 +1572,13 @@ static struct SettingsScreen {
 	struct LLabel  lblMode, lblColours;
 	struct LCheckbox cbExtra, cbEmpty, cbScale;
 	struct LLine sep;
+#ifdef CC_BUILD_DREAMCAST
+	struct LCheckbox cbSkipModem;
+	struct LLabel lblHint;
+#endif
 } SettingsScreen CC_BIG_VAR;
 
-#define SETTINGS_SCREEN_MAX_WIDGETS 9
+#define SETTINGS_SCREEN_MAX_WIDGETS 10
 static struct LWidget* settings_widgets[SETTINGS_SCREEN_MAX_WIDGETS];
 
 LAYOUTS set_btnMode[]    = { { ANCHOR_CENTRE,     -135 }, { ANCHOR_CENTRE,  -70 } };
@@ -1455,6 +1591,16 @@ LAYOUTS set_cbExtra[] = { { ANCHOR_CENTRE_MIN, -190 }, { ANCHOR_CENTRE,  44 } };
 LAYOUTS set_cbEmpty[] = { { ANCHOR_CENTRE_MIN, -190 }, { ANCHOR_CENTRE,  84 } };
 LAYOUTS set_cbScale[] = { { ANCHOR_CENTRE_MIN, -190 }, { ANCHOR_CENTRE, 124 } };
 LAYOUTS set_btnBack[] = { { ANCHOR_CENTRE,        0 }, { ANCHOR_CENTRE, 170 } };
+#ifdef CC_BUILD_DREAMCAST
+LAYOUTS dc_set_btnMode[]     = { { ANCHOR_CENTRE, -135 }, { ANCHOR_CENTRE,  -80 } };
+LAYOUTS dc_set_lblMode[]     = { { ANCHOR_CENTRE_MIN, -70 }, { ANCHOR_CENTRE,  -80 } };
+LAYOUTS dc_set_btnColours[]  = { { ANCHOR_CENTRE, -135 }, { ANCHOR_CENTRE,  -25 } };
+LAYOUTS dc_set_lblColours[]  = { { ANCHOR_CENTRE_MIN, -70 }, { ANCHOR_CENTRE,  -25 } };
+LAYOUTS dc_set_sep[]         = { { ANCHOR_CENTRE,     0 }, { ANCHOR_CENTRE,   20 } };
+LAYOUTS dc_set_cbSkipModem[] = { { ANCHOR_CENTRE_MIN, -190 }, { ANCHOR_CENTRE,  55 } };
+LAYOUTS dc_set_lblHint[]     = { { ANCHOR_CENTRE,     0 }, { ANCHOR_CENTRE,  120 } };
+LAYOUTS dc_set_btnBack[]     = { { ANCHOR_CENTRE,     0 }, { ANCHOR_CENTRE,  170 } };
+#endif
 
 
 #if defined CC_BUILD_MOBILE
@@ -1483,6 +1629,30 @@ static void SettingsScreen_DPIScaling(struct LCheckbox* w) {
 #endif
 }
 
+#ifdef CC_BUILD_DREAMCAST
+static void SettingsScreen_ToggleSkipModem(struct LCheckbox* w) {
+	Options_SetBool("launcher-dc-skipmodem", w->value);
+}
+
+static void SettingsScreen_AddWidgets(struct SettingsScreen* s) {
+	LLine_Add(s,   &s->sep, 380, dc_set_sep);
+	LButton_Add(s, &s->btnMode, 110, 35, "Mode",
+				SwitchToChooseMode, dc_set_btnMode);
+	LLabel_Add(s,  &s->lblMode, "&eClassic vs enhanced gameplay", dc_set_lblMode);
+
+	if (!Options_GetBool(OPT_CLASSIC_MODE, false)) {
+		LButton_Add(s, &s->btnColours, 110, 35, "Theme",
+					SwitchToThemes, dc_set_btnColours);
+		LLabel_Add(s,  &s->lblColours, "&eLauncher colour scheme", dc_set_lblColours);
+	}
+
+	LCheckbox_Add(s, &s->cbSkipModem, "Skip modem dial on next boot",
+				SettingsScreen_ToggleSkipModem, dc_set_cbSkipModem);
+	LLabel_Add(s,  &s->lblHint, "&7Saves live in /sd/ClassiCube/ when SD is present", dc_set_lblHint);
+	LButton_Add(s, &s->btnBack, 80, 35, "Back",
+				SwitchToMain, dc_set_btnBack);
+}
+#else
 static void SettingsScreen_AddWidgets(struct SettingsScreen* s) {
 	LLine_Add(s,   &s->sep, 380, set_sep);
 	LButton_Add(s, &s->btnMode, 110, 35, "Mode", 
@@ -1510,11 +1680,15 @@ static void SettingsScreen_AddWidgets(struct SettingsScreen* s) {
 	LButton_Add(s,   &s->btnBack, 80, 35, "Back", 
 				SwitchToMain, set_btnBack);
 }
+#endif
 
 static void SettingsScreen_Activated(struct LScreen* s_) {
 	struct SettingsScreen* s = (struct SettingsScreen*)s_;
 	SettingsScreen_AddWidgets(s);
 
+#ifdef CC_BUILD_DREAMCAST
+	LCheckbox_Set(&s->cbSkipModem, Options_GetBool("launcher-dc-skipmodem", false));
+#else
 #if defined CC_BUILD_MOBILE
 	LCheckbox_Set(&s->cbExtra, Options_GetBool(OPT_LANDSCAPE_MODE, false));
 #else
@@ -1523,6 +1697,7 @@ static void SettingsScreen_Activated(struct LScreen* s_) {
 
 	LCheckbox_Set(&s->cbEmpty, Launcher_ShowEmptyServers);
 	LCheckbox_Set(&s->cbScale, DisplayInfo.DPIScaling);
+#endif
 }
 
 void SettingsScreen_SetActive(void) {

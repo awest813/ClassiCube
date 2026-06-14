@@ -131,7 +131,7 @@ static void InitGLState(void) {
 	listTR.list_type = PVR_LIST_TR_POLY;
 
 	CommandsList_Reserve(&listOP, 2048 * 3);
-	CommandsList_Reserve(&listPT, 1024 * 3);
+	CommandsList_Reserve(&listPT, 2048 * 3);
 	CommandsList_Reserve(&listTR, 2048 * 3);
 }
 
@@ -1030,7 +1030,6 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 	vec3f_t v1, v2;
 	matrix_t saved;
 	int lineCount;
-	cc_bool hdr_appended = false;
 
 	if (!verticesCount || renderingDisabled) return;
 	lineCount = verticesCount >> 1;
@@ -1042,6 +1041,7 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 	mat_apply(&_view);
 
 	BuildPolyContext(&hdr, PVR_LIST_OP_POLY);
+	CommandsList_Append(&listOP, &hdr);
 
 	src = (struct VertexColoured*)gfx_vertices;
 	for (int i = 0; i < lineCount; i++) {
@@ -1052,10 +1052,6 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 		ProjectToScreen(b, &v2);
 		PVR_Line_BuildVerts(lineVerts, &v1, &v2, 1.0f, PackedCol_ToPVR(a->Col));
 
-		if (!hdr_appended) {
-			CommandsList_Append(&listOP, &hdr);
-			hdr_appended = true;
-		}
 		CommandsList_Append(&listOP, &lineVerts[0]);
 		CommandsList_Append(&listOP, &lineVerts[1]);
 		CommandsList_Append(&listOP, &lineVerts[2]);

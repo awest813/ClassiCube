@@ -171,7 +171,8 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
 - [x] Skip modem dial when SD card mounted or START held at boot
 - [x] `launcher-dc-skipmodem` option + Direct connect checkbox
-- [x] Boot status on-screen during modem init (`Platform_Log` + `vid_flip` before `Window_Init`)
+- [x] Boot splash title screen during `Platform_NetworkInit` (status log scrolls below)
+- [x] PT command list preallocation raised to 2048×3 (direct-list hot path)
 - [x] `launcher-dc-skipmodem` option skips modem after options load (`Platform_NetworkInit`)
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)
 - [x] VMU save checks `fs_write` result
@@ -217,7 +218,7 @@ The backend is a full custom implementation (~1100 lines) with:
 **Performance ideas (P3):**
 
 - [ ] Profile `TransformFast.S` vs `TransformClip.S` / `TransformDirect.S` paths
-- [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation (`CommandsList_Reserve`) — initial caps raised to 2048/1024/2048
+- [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation — PT/OP/TR initial caps at 2048×3; TA buffer 32×50000
 - [ ] Consider PVR FSAA (`fsaa` flag currently `false`)
 - [ ] Document twiddle format differences vs Xbox/PS3 ports (see comments in those `Graphics_*.c` files)
 

@@ -10,6 +10,7 @@
 #include "../Utils.h"
 #include "../Errors.h"
 #include "../SystemFonts.h"
+#include "../Constants.h"
 
 #include <errno.h>
 #include <netdb.h>
@@ -97,8 +98,12 @@ static cc_bool log_timestamp = true;
 extern cc_bool window_inited;
 
 #define MAX_ONSCREEN_LINES 17
+#define BOOT_LOG_LINES      6
+#define BOOT_LOG_Y_START  300
 #define ONSCREEN_LINE_HEIGHT (24 + 2) // 8 * 3 text, plus 2 pixel padding
 #define Onscreen_LineOffset(y) ((y) * vid_mode->width)
+
+static cc_bool boot_title_drawn;
 
 struct LogPosition { int x, y; };
 static void PlotOnscreen(int x, int y, void* ctx) {
@@ -112,6 +117,32 @@ static void PlotOnscreen(int x, int y, void* ctx) {
 	vram_s[line_offset + x] = 0xFFFF;
 }
 
+static void DrawCenteredText(const char* text, int y, int scale) {
+	int len = 0;
+	struct LogPosition pos;
+
+	for (const char* p = text; *p; p++) len++;
+	pos.x = (vid_mode->width - len * (6 * scale)) / 2;
+	if (pos.x < 0) pos.x = 0;
+	pos.y = y;
+
+	for (int i = 0; text[i]; i++)
+	{
+		pos.x += FallbackFont_Plot((cc_uint8)text[i], PlotOnscreen, scale, &pos);
+	}
+}
+
+static void BootSplash_DrawTitle(void) {
+	if (boot_title_drawn || window_inited || !vid_mode) return;
+	boot_title_drawn = true;
+
+	sq_set16((uintptr_t)vram_s, 0x0000, vid_mode->width * vid_mode->height);
+	DrawCenteredText(GAME_APP_TITLE, 140, 4);
+	DrawCenteredText("Dreamcast", 190, 3);
+	DrawCenteredText("Hold START to skip network wait", 430, 2);
+	vid_flip(-1);
+}
+
 static void LogOnscreen(const char* msg, int len) {
 	char buffer[50];
 	cc_string str;
@@ -123,10 +154,13 @@ static void LogOnscreen(const char* msg, int len) {
 	String_AppendAll(&str, msg, len);
 
 	struct LogPosition pos;
-	pos.x =  0;
-	pos.y = 10 + (str_offset * ONSCREEN_LINE_HEIGHT);
+	int max_lines = boot_title_drawn ? BOOT_LOG_LINES : MAX_ONSCREEN_LINES;
+	int y_start   = boot_title_drawn ? BOOT_LOG_Y_START : 10;
 
-	str_offset = (str_offset + 1) % MAX_ONSCREEN_LINES;
+	pos.x =  0;
+	pos.y = y_start + (str_offset * ONSCREEN_LINE_HEIGHT);
+
+	str_offset = (str_offset + 1) % max_lines;
 
 	uint16_t* dst  = vram_s + Onscreen_LineOffset(pos.y);
 	int num_pixels = ONSCREEN_LINE_HEIGHT * 2 * vid_mode->width;
@@ -863,7 +897,8 @@ void Platform_Init(void) {
 }
 
 void Platform_NetworkInit(void) {
-	Platform_LogConst("ClassiCube - Dreamcast");
+	BootSplash_DrawTitle();
+	Platform_LogConst("Starting network..");
 	if (net_default_dev) return;
 
 	if (Options_GetBool("launcher-dc-skipmodem", false)) {

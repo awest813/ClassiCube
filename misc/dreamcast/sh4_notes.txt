@@ -42,6 +42,15 @@ See also: Graphics_Dreamcast.c Gfx_SetScissor — the PT (punch-through) polygon
 list is submitted directly to the TA, so USERCLIP commands must be submitted
 immediately rather than buffered in listPT.
 
-Gfx_DrawVb_Lines uses src/dreamcast/PVR_Line.c derived from KOS pvrline example
-(see misc/dreamcast/KOS_ATTRIBUTION.txt). Audio polls all snd_stream handles each
-frame per KOS multi-stream pattern.
+See also: Graphics_Dreamcast.c Gfx_SetScissor — the PT (punch-through) polygon
+list is submitted directly to the TA, so USERCLIP commands must be submitted
+immediately rather than buffered in listPT.
+
+Gfx_DrawVb_Lines batches line quads into listOP (PVR_Line.c / KOS pvrline).
+Textured and coloured 2D quads use Draw*_Quads_Direct store-queue paths.
+Texture atlas scrolling uses Gfx_DC_TextureOffU/V in the asm vertex loaders.
+
+TA vertex buffer: VERTEX_BUFFER_SIZE = 32 * 50000 in InitGPU.
+Command list preallocation: 2048 vertices × 3 lists (OP/PT/TR) at Gfx_Create.
+
+Audio polls all snd_stream handles each frame per KOS multi-stream pattern.

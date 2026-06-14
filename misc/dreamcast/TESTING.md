@@ -84,7 +84,7 @@ Verify these specifically after code changes:
 25. **Spawn bind** — Set spawn is B+START; START alone sends chat
 27. **Coloured direct PT** — Map overlay / coloured UI quads use store-queue direct path
 28. **Line batching** — Selection box edges deferred to OP list (no PT list interruption)
-29. **Texture offset asm** — Cloud/sky scroll offset without shifting vertex buffer each draw
+30. **Boot splash** — Title + "Hold START" hint on CRT; network log scrolls in lower area
 
 ## Known Limitations (not test failures)
 

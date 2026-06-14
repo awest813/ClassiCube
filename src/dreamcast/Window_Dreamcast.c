@@ -49,6 +49,9 @@ void Window_Free(void) { }
 
 void Window_Create2D(int width, int height) { 
 	Window_Main.Is3D = false;
+#ifdef CC_BUILD_DREAMCAST
+	pvr_wait_ready();
+#endif
 }
 
 void Window_Create3D(int width, int height) { 

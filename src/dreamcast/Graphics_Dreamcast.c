@@ -159,6 +159,9 @@ cc_bool Gfx_TryRestoreContext(void) {
 
 void Gfx_Free(void) {
 	Gfx_FreeState();
+#ifdef CC_BUILD_DREAMCAST
+	pvr_wait_ready();
+#endif
 }
 
 

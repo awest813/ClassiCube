@@ -1578,7 +1578,7 @@ static struct SettingsScreen {
 #endif
 } SettingsScreen CC_BIG_VAR;
 
-#define SETTINGS_SCREEN_MAX_WIDGETS 9
+#define SETTINGS_SCREEN_MAX_WIDGETS 10
 static struct LWidget* settings_widgets[SETTINGS_SCREEN_MAX_WIDGETS];
 
 LAYOUTS set_btnMode[]    = { { ANCHOR_CENTRE,     -135 }, { ANCHOR_CENTRE,  -70 } };

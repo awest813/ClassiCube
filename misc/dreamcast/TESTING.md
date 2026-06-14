@@ -82,7 +82,9 @@ Verify these specifically after code changes:
 23. **Split-screen scissor** — Viewport clip resets each 3D frame; no bleed from prior player region
 24. **Keyboard unplug** — Disconnecting maple keyboard releases held keys
 25. **Spawn bind** — Set spawn is B+START; START alone sends chat
-26. **Menu blit perf** — Launcher framebuffer blit no longer waits vblank per dirty rect
+27. **Coloured direct PT** — Map overlay / coloured UI quads use store-queue direct path
+28. **Line batching** — Selection box edges deferred to OP list (no PT list interruption)
+29. **Texture offset asm** — Cloud/sky scroll offset without shifting vertex buffer each draw
 
 ## Known Limitations (not test failures)
 

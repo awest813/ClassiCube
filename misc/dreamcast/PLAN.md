@@ -140,7 +140,9 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] `Gfx_ClearBuffers` — applies background color when color buffer requested
 - [x] `Gfx_SetViewport` — loads viewport matrix to SH4 FPU for split-screen
 - [x] Split-screen TA clip reset at `Gfx_BeginFrame` and `Gfx_OnWindowResize`
-- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` example (`PVR_Line.c`, screen-space `frsqrt` expansion)
+- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` path; batched into OP list at frame end (no mid-frame TA interrupt)
+- [x] Coloured 2D quads use `DrawColouredQuads_Direct` (SH4 store queue, same as textured UI path)
+- [x] Texture atlas offset applied in asm (`Gfx_DC_TextureOffU/V`) — no per-draw VB mutation
 - [x] `Gfx_UpdateTexture` — guards against partial updates on paletted 4bpp textures
 
 ### Audio (`Audio_Dreamcast.c`)

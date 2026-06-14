@@ -21,6 +21,9 @@
 // =========================================================
 // ========================= VERTEX LOADING ================
 // =========================================================
+.extern _Gfx_DC_TextureOffU
+.extern _Gfx_DC_TextureOffV
+
 .macro LoadTexturedVertex off
 // LOAD XYZ
 	mov		NXT,  SRC // MT, SRC = NXT
@@ -37,6 +40,22 @@
     fmov.s @SRC+, F_C // LS, C = src->color
     fmov.s @SRC+, F_U // LS, U = src->u
     fmov.s @SRC+, F_V // LS, V = src->v
+    fmov.s @_Gfx_DC_TextureOffU, fr8
+    fadd   fr8, F_U
+    fmov.s @_Gfx_DC_TextureOffV, fr8
+    fadd   fr8, F_V
+.endm
+
+.macro LoadColouredVertex off
+	mov		NXT,  SRC
+    fmov.s @SRC+, F_X
+    fmov.s @SRC+, F_Y
+    fmov.s @SRC+, F_Z
+    fldi1 F_W
+    add   #\off,  NXT
+    pref   @NXT
+    ftrv xmtrx, XYZW
+    fmov.s @SRC+, F_C
 .endm
 
 // =========================================================
@@ -93,4 +112,41 @@ BEG_FUNC(_DrawTexturedQuads_Direct)
 	rts
 	nop
 END_FUNC(_DrawTexturedQuads_Direct)
+
+// =========================================================
+// ==================== COLOURED VERTEX TRANSFORM ==========
+// =========================================================
+BEG_FUNC(_DrawColouredQuads_Direct)
+    fldi0 F_U
+    fldi0 F_V
+    mov   SRC, NXT
+	add   #16, NXT
+    mov #0xE0, VTX
+    pref  @NXT
+    shll16 VTX
+    shll8  VTX
+    mov #0xF0, EOS
+    shll16 EOS
+    shll8  EOS
+
+.C_TRANSFORM_QUAD:
+    LoadColouredVertex 16
+    ProcessVertex VTX
+
+    LoadColouredVertex -32
+    ProcessVertex VTX
+
+    LoadColouredVertex 48
+    ProcessVertex VTX
+
+    LoadColouredVertex 32
+    ProcessVertex EOS
+
+    dt CNT
+    bf .C_TRANSFORM_QUAD
+    nop
+
+	rts
+	nop
+END_FUNC(_DrawColouredQuads_Direct)
 

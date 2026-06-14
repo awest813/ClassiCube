@@ -23,3 +23,4 @@ Direct connect screen options (persisted in options.txt):
 - launcher-dc-ip
 - launcher-dc-port
 - launcher-dc-mppass (stored securely)
+- launcher-dc-skipmodem (skip ~40s modem dial on boot; default false)

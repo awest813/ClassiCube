@@ -854,9 +854,14 @@ void Platform_Init(void) {
 		Platform_LogConst("Broadband adapter detected");
 	}
 	TryInitSDCard();
+}
 
+void Platform_NetworkInit(void) {
 	if (net_default_dev) return;
-	if (usingSD) {
+
+	if (Options_GetBool("launcher-dc-skipmodem", false)) {
+		Platform_LogConst("launcher-dc-skipmodem set - skipping modem init");
+	} else if (usingSD) {
 		Platform_LogConst("SD card ready - skipping modem init");
 	} else if (StartHeldOnPorts()) {
 		Platform_LogConst("START held - skipping modem init");

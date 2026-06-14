@@ -165,6 +165,7 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] SD sync: batched via `MarkSDDirty` / `SyncSDCard` on `Platform_Free` (not per `File_Close`)
 - [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
 - [x] Skip modem dial when SD card mounted or START held at boot
+- [x] `launcher-dc-skipmodem` option skips modem after options load (`Platform_NetworkInit`)
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)
 - [x] VMU save checks `fs_write` result
 - [x] `Directory_Enum` — `.` / `..` filtered (defensive, same as other ports)
@@ -202,7 +203,7 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Profile VRAM usage on large worlds — default view distance 64, cycle capped at 128, MAX_TEXTURE_COUNT 512
 - [x] Validate scissor (`Gfx_SetScissor`) — PT list clips submitted immediately; full-screen clip resets TA on disable
 - [x] Review fog table updates vs `gfx_fogEnabled` toggles
-- [x] `Gfx_DrawVb_Lines` — line pairs expanded to thin quads for selection box edges
+- [x] `Gfx_DrawVb_Lines` — KOS `pvrline` path; poly header via `BuildPolyContext` (depth/scissor/fog)
 - [x] `Gfx_UpdateTexture` — guard against partial updates on paletted (4bpp) textures
 - [ ] Real-hardware comparison with Flycast for Z-fighting, sorting, and translucent water
 
@@ -220,6 +221,8 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Resolve thread-safety of `AudioBackend_Tick` vs main audio thread
 - [ ] Measure latency and buffer sizes (`AUDIO_MAX_BUFFERS`, `SND_STREAM_BUFFER_MAX`)
 - [x] `StreamContext_Pause` — implemented via `snd_stream_stop`
+- [x] `AudioBackend_Tick` polls all streams; per-context `Audio_Poll` polls one handle
+- [x] Callback returns 4-byte aligned sample lengths for KOS DMA
 
 ### 4. UI, storage & networking (P2)
 
@@ -228,6 +231,7 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Batch SD writes (defer `fs_fat_sync` to `Platform_Free`)
 - [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
 - [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
+- [x] Deferred modem init (`Platform_NetworkInit` after `Options_Load`)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention noted; init order fixed)
 - [x] `make dreamcast-assets` / `fetch-assets.sh` downloads texture + audio zips for CI and local builds
 

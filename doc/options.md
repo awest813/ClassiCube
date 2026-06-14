@@ -52,6 +52,7 @@ Listed below are all of the options supported in options.txt
 `launcher-dc-ip`|IP address or hostname to connect to
 `launcher-dc-port`|Port to connect on
 `launcher-dc-mppass`|Encrypted mppass to use when connecting
+`launcher-dc-skipmodem`|`false`|Skip Dreamcast modem dial on boot (BBA/SD/START still take precedence)
 
 ### Resume
 |Name|Description|

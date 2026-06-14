@@ -44,6 +44,10 @@ CC_API void Platform_DecodePath(cc_string* dst, const cc_filepath* path);
 
 /* Initialises the platform specific state. */
 void Platform_Init(void);
+#ifdef CC_BUILD_DREAMCAST
+/* Deferred network init (modem/BBA) after options are loaded. */
+void Platform_NetworkInit(void);
+#endif
 /* Frees the platform specific state. */
 void Platform_Free(void);
 /* Sets the appropriate default current/working directory. */

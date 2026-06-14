@@ -77,6 +77,8 @@ Verify these specifically after code changes:
 16. **VMU any slot** — Options load/save on VMU in any maple port/slot
 17. **Selection box edges** — Multiplayer selection regions show wireframe edges (KOS pvrline path)
 18. **Multi-stream audio** — Music + SFX concurrently without stalling (all streams polled each frame)
+19. **Skip-modem option** — Set `launcher-dc-skipmodem=true` in options.txt; boot skips modem dial
+20. **Analog deadzone** — Dual-stick drift suppressed (12-unit deadzone, scaled axes)
 
 ## Known Limitations (not test failures)
 

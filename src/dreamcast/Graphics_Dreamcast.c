@@ -1016,7 +1016,6 @@ static int PackedCol_ToPVR(PackedCol col) {
 
 void Gfx_DrawVb_Lines(int verticesCount) {
 	struct VertexColoured* src;
-	pvr_poly_cxt_t cxt;
 	pvr_poly_hdr_t hdr;
 	vec3f_t v1, v2;
 	int lineCount;
@@ -1025,10 +1024,7 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 	lineCount = verticesCount >> 1;
 	if (!lineCount) return;
 
-	pvr_poly_cxt_col(&cxt, PVR_LIST_OP_POLY);
-	if (gfx_depthTest)  cxt.depth.comparison = PVR_DEPTHCMP_GEQUAL;
-	if (gfx_depthWrite) cxt.depth.write      = PVR_DEPTHWRITE_ENABLE;
-	pvr_poly_compile(&hdr, &cxt);
+	BuildPolyContext(&hdr, PVR_LIST_OP_POLY);
 
 	src = (struct VertexColoured*)gfx_vertices;
 	for (int i = 0; i < lineCount; i++) {

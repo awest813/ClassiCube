@@ -293,11 +293,12 @@ static void HandleButtons(int port, int mods) {
 	Gamepad_SetButton(port, CCPAD_CDOWN,   mods & CONT_DPAD2_DOWN);
 }
 
-#define AXIS_SCALE 8.0f
+#define AXIS_DEADZONE 12
+#define AXIS_SCALE    9.0f
 static void HandleJoystick(int port, int axis, int x, int y, float delta) {
-	if (Math_AbsI(x) <= 8) x = 0;
-	if (Math_AbsI(y) <= 8) y = 0;	
-	
+	if (Math_AbsI(x) <= AXIS_DEADZONE) x = 0;
+	if (Math_AbsI(y) <= AXIS_DEADZONE) y = 0;
+
 	Gamepad_SetAxis(port, axis, x / AXIS_SCALE, y / AXIS_SCALE, delta);
 }
 

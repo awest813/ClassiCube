@@ -131,6 +131,9 @@ static void SetupProgram(int argc, char** argv) {
 	
 	res = Platform_SetDefaultCurrentDirectory(argc, argv);
 	Options_Load();
+#ifdef CC_BUILD_DREAMCAST
+	Platform_NetworkInit();
+#endif
 	Window_Init();
 	Gamepads_Init();
 	

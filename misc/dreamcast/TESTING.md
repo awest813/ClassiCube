@@ -78,7 +78,8 @@ Verify these specifically after code changes:
 17. **Selection box edges** — Multiplayer selection regions show wireframe edges (KOS pvrline path)
 18. **Multi-stream audio** — Music + SFX concurrently without stalling (all streams polled each frame)
 19. **Skip-modem option** — Set `launcher-dc-skipmodem=true` in options.txt; boot skips modem dial
-20. **Analog deadzone** — Dual-stick drift suppressed (12-unit deadzone, scaled axes)
+21. **Boot on-screen log** — Modem/SD/BBA status visible on CRT during init (before launcher)
+22. **Skip-modem checkbox** — Direct connect screen toggles `launcher-dc-skipmodem`
 
 ## Known Limitations (not test failures)
 

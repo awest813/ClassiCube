@@ -2,7 +2,7 @@
 
 ClassiCube’s Dreamcast build is **usable but not fully hardware-validated**: it boots, renders the world via the PVR2, supports multiplayer over the modem or broadband adapter, and can produce a `.cdi` in CI when KOS assets are present.
 
-**Status:** P0 stability fixes and P2 polish are **code-complete** on branch `cursor/dreamcast-p0-fixes-5f6d`. Remaining work is mostly **real-hardware / Flycast validation** (audio stress, split-screen, 30+ min sessions). See `TESTING.md` for the regression checklist.
+**Status:** P0 stability fixes and P2 polish are **code-complete** on `master` (through PR #3) plus follow-up branch `cursor/dreamcast-continue-5f6d`. Remaining work is mostly **real-hardware / Flycast validation** (audio stress, split-screen, 30+ min sessions). See `TESTING.md` for the regression checklist.
 
 ### Completed in this effort (code)
 
@@ -11,8 +11,8 @@ ClassiCube’s Dreamcast build is **usable but not fully hardware-validated**: i
 | Stability | Gamepad `continue` fix, socket `fcntl`, crash handler, thread create check |
 | Graphics | Clear color, scissor PT-list + disable reset, vsync, VRAM cap, line drawing, texture update guard |
 | Input | Per-port keyboard, all-port mouse, gamepad disconnect, button labels, bind fixes |
-| Platform | BBA+SD coexistence, SD sync batching, VMU any-slot, modem skip (SD / START), entropy |
-| Audio | Poll in `Audio_Poll`, callback buffer skip, `StreamContext_Pause` |
+| Platform | BBA+SD coexistence, SD sync batching, VMU any-slot, modem skip (SD / START / option), entropy, boot on-screen log |
+| Audio | Poll in `Audio_Poll`, callback buffer skip, `StreamContext_Pause`, multi-stream tick, DMA alignment |
 | UI | VirtualDialog, framebuffer `vid_flip` |
 | Build | `fetch-assets.sh`, `make dreamcast-assets`, CI asset fetch, Makefile checks |
 
@@ -156,7 +156,7 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] Gamepad button display names (A/B/X/Y, L/R) in controls UI
 - [x] Screenshot bind unbound (was conflicting with inventory on X)
 - [x] `CONT_D` no longer double-mapped to SELECT and CCPAD_7
-- [ ] Analog axis deadzone / scale (`AXIS_SCALE`, threshold 8) — verify on hardware and dual-analog sticks
+- [ ] Analog axis deadzone / scale — tuned (deadzone 12, scale 9.0); verify on hardware and dual-analog sticks
 - [x] `Window_DrawFramebuffer` — uses `vid_flip` after 2D draw for tear-free UI
 - [x] `Window_ShowDialog` — uses `VirtualDialog_Show`
 
@@ -165,6 +165,8 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] SD sync: batched via `MarkSDDirty` / `SyncSDCard` on `Platform_Free` (not per `File_Close`)
 - [x] BBA + SD coexistence — `TryInitSDCard()` always runs after BBA init
 - [x] Skip modem dial when SD card mounted or START held at boot
+- [x] `launcher-dc-skipmodem` option + Direct connect checkbox
+- [x] Boot status on-screen during modem init (`Platform_Log` + `vid_flip` before `Window_Init`)
 - [x] `launcher-dc-skipmodem` option skips modem after options load (`Platform_NetworkInit`)
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)
 - [x] VMU save checks `fs_write` result
@@ -229,8 +231,9 @@ The backend is a full custom implementation (~1100 lines) with:
 - [x] Implement `Window_ShowDialog` (modal message for errors / disconnect)
 - [x] Double-buffer 2D framebuffer blits to reduce menu tearing (`Window_DrawFramebuffer`)
 - [x] Batch SD writes (defer `fs_fat_sync` to `Platform_Free`)
-- [x] Improve boot UX when no network device: START to skip wait, clearer offline messages
+- [x] Improve boot UX when no network device: START to skip wait, clearer offline messages, on-screen boot log
 - [x] Document direct-connect defaults persisted in options (`launcher-dc-username`, `launcher-dc-ip`, etc.)
+- [x] Deferred modem init (`Platform_NetworkInit` after `Options_Load`)
 - [x] Deferred modem init (`Platform_NetworkInit` after `Options_Load`)
 - [ ] W5500 adapter path: confirm coexistence with SD (serial port contention noted; init order fixed)
 - [x] `make dreamcast-assets` / `fetch-assets.sh` downloads texture + audio zips for CI and local builds
@@ -239,7 +242,7 @@ The backend is a full custom implementation (~1100 lines) with:
 
 Dreamcast defines `CC_BUILD_SPLITSCREEN` but split-screen needs verification:
 
-- [ ] Confirm launcher exposes split-screen entry where appropriate (`LScreens.c` / `Launcher.c` guards)
+- [ ] Confirm launcher exposes split-screen entry where appropriate (`LScreens.c` / `Launcher.c` guards) — button labelled "Splitscreen" on DC
 - [ ] Test 2–4 controllers with corrected `Gamepads_Process` loop
 - [x] Disconnect stale gamepad state when maple port goes empty
 - [ ] Verify `defaults_dc` bindings feel right (triggers = place/delete, face buttons = jump/chat/inventory)

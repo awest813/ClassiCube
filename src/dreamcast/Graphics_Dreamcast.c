@@ -996,15 +996,7 @@ void Gfx_SetVertexFormat(VertexFormat fmt) {
 }
 
 static void ProjectToScreen(const struct VertexColoured* in, vec3f_t* out) {
-	matrix_t saved;
-	mat_store(&saved);
-
-	mat_load(&mat_vp);
-	mat_apply(&_proj);
-	mat_apply(&_view);
 	mat_trans_point3(out, in->x, in->y, in->z);
-
-	mat_load(&saved);
 }
 
 static int PackedCol_ToPVR(PackedCol col) {
@@ -1018,11 +1010,17 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 	struct VertexColoured* src;
 	pvr_poly_hdr_t hdr;
 	vec3f_t v1, v2;
+	matrix_t saved;
 	int lineCount;
 
 	if (!verticesCount || renderingDisabled) return;
 	lineCount = verticesCount >> 1;
 	if (!lineCount) return;
+
+	mat_store(&saved);
+	mat_load(&mat_vp);
+	mat_apply(&_proj);
+	mat_apply(&_view);
 
 	BuildPolyContext(&hdr, PVR_LIST_OP_POLY);
 
@@ -1036,6 +1034,7 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 		PVR_Line_Draw(&v1, &v2, 1.0f, PackedCol_ToPVR(a->Col),
 			PVR_LIST_OP_POLY, &hdr);
 	}
+	mat_load(&saved);
 }
 
 void Gfx_DrawVb_IndexedTris_Range(int verticesCount, int startVertex, DrawHints hints) {

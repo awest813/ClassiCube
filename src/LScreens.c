@@ -455,18 +455,24 @@ static struct DirectConnectScreen {
 	struct LButton btnConnect, btnBack;
 	struct LInput iptUsername, iptAddress, iptMppass;
 	struct LLabel lblStatus;
+#ifdef CC_BUILD_DREAMCAST
+	struct LCheckbox cbSkipModem;
+#endif
 } DirectConnectScreen CC_BIG_VAR;
 
-#define DIRECTCONNECT_SCREEN_MAXWIDGETS 6
+#define DIRECTCONNECT_SCREEN_MAXWIDGETS 7
 static struct LWidget* directConnect_widgets[DIRECTCONNECT_SCREEN_MAXWIDGETS];
 
 LAYOUTS dc_iptUsername[] = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE, -120 } };
 LAYOUTS dc_iptAddress[]  = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE,  -75 } };
 LAYOUTS dc_iptMppass[]   = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE,  -30 } };
 
-LAYOUTS dc_btnConnect[]  = { { ANCHOR_CENTRE, -110 }, { ANCHOR_CENTRE, 20 } };
+LAYOUTS dc_btnConnect[]  = { { ANCHOR_CENTRE, -110 }, { ANCHOR_CENTRE, 55 } };
 LAYOUTS dc_btnBack[]     = { { ANCHOR_CENTRE,  125 }, { ANCHOR_CENTRE, 20 } };
-LAYOUTS dc_lblStatus[]   = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 70 } };
+LAYOUTS dc_lblStatus[]   = { { ANCHOR_CENTRE,    0 }, { ANCHOR_CENTRE, 95 } };
+#ifdef CC_BUILD_DREAMCAST
+LAYOUTS dc_cbSkipModem[] = { { ANCHOR_CENTRE_MIN, -165 }, { ANCHOR_CENTRE, 15 } };
+#endif
 
 
 static void DirectConnectScreen_UrlFilter(cc_string* str) {
@@ -478,6 +484,12 @@ static void DirectConnectScreen_UrlFilter(cc_string* str) {
 	LInput_SetString(&DirectConnectScreen.iptMppass,   &mppass);
 	str->length = 0;
 }
+
+#ifdef CC_BUILD_DREAMCAST
+static void DirectConnectScreen_ToggleSkipModem(struct LCheckbox* w) {
+	Options_SetBool("launcher-dc-skipmodem", w->value);
+}
+#endif
 
 static void DirectConnectScreen_StartClient(void* w) {
 	static const cc_string defMppass = String_FromConst("(none)");
@@ -530,8 +542,12 @@ static void DirectConnectScreen_Activated(struct LScreen* s_) {
 	LInput_Add(s,  &s->iptUsername, 330, "Username..",               dc_iptUsername);
 	LInput_Add(s,  &s->iptAddress,  330, "IP address:Port number..", dc_iptAddress);
 	LInput_Add(s,  &s->iptMppass,   330, "Mppass..",                 dc_iptMppass);
+#ifdef CC_BUILD_DREAMCAST
+	LCheckbox_Add(s, &s->cbSkipModem, "Skip modem dial on boot",
+				DirectConnectScreen_ToggleSkipModem, dc_cbSkipModem);
+#endif
 
-	LButton_Add(s, &s->btnConnect, 110, 35, "Connect", 
+	LButton_Add(s, &s->btnConnect, 110, 35, "Connect",
 				DirectConnectScreen_StartClient, dc_btnConnect);
 	LButton_Add(s, &s->btnBack,     80, 35, "Back",    
 				SwitchToMain, dc_btnBack);
@@ -564,6 +580,9 @@ static void DirectConnectScreen_Load(struct LScreen* s_) {
 	LInput_SetText(&s->iptUsername, &user);
 	LInput_SetText(&s->iptAddress,  &addr);
 	LInput_SetText(&s->iptMppass,   &mppass);
+#ifdef CC_BUILD_DREAMCAST
+	LCheckbox_Set(&s->cbSkipModem, Options_GetBool("launcher-dc-skipmodem", false));
+#endif
 }
 
 void DirectConnectScreen_SetActive(void) {
@@ -872,7 +891,12 @@ static void MainScreen_Activated(struct LScreen* s_) {
 	LButton_Add(s, &s->btnSPlayer, 200, 35, "Singleplayer",
 				MainScreen_Singleplayer, main_btnSPlayer);
 #ifdef CC_BUILD_SPLITSCREEN
-	LButton_Add(s, &s->btnSplit,   200, 35, "Splitscreen (WIP)", 
+	LButton_Add(s, &s->btnSplit,   200, 35,
+#ifdef CC_BUILD_DREAMCAST
+				"Splitscreen",
+#else
+				"Splitscreen (WIP)",
+#endif
 				SwitchToSplitScreen,     main_btnSplit);
 #endif
 

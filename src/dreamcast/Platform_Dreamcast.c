@@ -148,6 +148,7 @@ void Platform_Log(const char* msg, int len) {
 	// Log details on-screen for initial modem initing etc
 	//  (this can take around 40 seconds on average)
 	LogOnscreen(msg, len);
+	vid_flip(-1);
 }
 
 TimeMS DateTime_CurrentUTC(void) {

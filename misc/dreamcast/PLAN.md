@@ -174,6 +174,8 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] Boot UX module (`BootUX.c`) — splash, storage/network summary, status line, loading transition
 - [x] Dreamcast launcher main menu — console layout (Play solo / Multiplayer / Splitscreen)
 - [x] Direct connect screen titled "Multiplayer" with hints and skip-modem option
+- [x] In-game return UX — pause "Exit to menu", disconnect "Back to menu", launcher 640×480
+- [x] First-run welcome dialog, splitscreen layout, connecting feedback, DC options screen
 - [x] PT command list preallocation raised to 2048×3 (direct-list hot path)
 - [x] `launcher-dc-skipmodem` option skips modem after options load (`Platform_NetworkInit`)
 - [x] VMU options path probes all maple VMU slots (not hardcoded A1 only)

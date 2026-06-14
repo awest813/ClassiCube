@@ -2258,7 +2258,11 @@ static void DisconnectScreen_ContextRecreated(void* screen) {
 	TextWidget_Set(&s->message, &s->messageStr, &s->messageFont);
 
 	DisconnectScreen_UpdateReconnect(s);
+#ifdef CC_BUILD_DREAMCAST
+	ButtonWidget_SetConst(&s->quit, "Back to menu", &s->titleFont);
+#else
 	ButtonWidget_SetConst(&s->quit, "Quit game", &s->titleFont);
+#endif
 }
 
 static void DisconnectScreen_OnReconnect(void* s, void* w) {

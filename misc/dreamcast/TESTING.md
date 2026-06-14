@@ -37,6 +37,9 @@ On real hardware, use a Dreamcast serial cable or coders cable with `dc-tool -x`
 | Serial log | Enable SH4 serial / stdout in emulator | Boot messages visible, no crash spam |
 | Single-player | Start local game | World loads, movement and block place/break work |
 | Direct connect | Enter IP:port on DC connect screen | Joins server or shows dialog on failure |
+| Return to menu | Pause → Exit to menu, or disconnect → Back to menu | Returns to launcher (not full quit) |
+| First-run welcome | Delete `launcher-dc-welcomed` from options | Welcome dialog on main menu |
+| Splitscreen | Launcher → Splitscreen → 2–4 players | Correct player count, controller hint shown |
 | Multi-controller | Map 2+ virtual controllers to ports A-D | All connected pads respond (see gamepad fix) |
 | Error dialog | Trigger connection failure | On-screen dialog appears (not just serial log) |
 | Audio | Enable sounds + music | Both play; no hang or divide-by-zero |

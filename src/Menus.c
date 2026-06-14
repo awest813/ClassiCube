@@ -528,7 +528,11 @@ static void PauseScreen_ContextRecreated(void* screen) {
 	struct FontDesc titleFont;
 	PauseScreenBase_ContextRecreated(s, &titleFont);
 
+#ifdef CC_BUILD_DREAMCAST
+	ButtonWidget_SetConst(&s->quit, "Exit to menu", &titleFont);
+#else
 	ButtonWidget_SetConst(&s->quit, "Quit game", &titleFont);
+#endif
 	PauseScreen_CheckHacksAllowed(s);
 	Font_Free(&titleFont);
 }

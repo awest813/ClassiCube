@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <ppp/ppp.h>
 #include <kos.h>
+#include <dc/sq.h>
 #include <dc/sd.h>
 #include <fat/fs_fat.h>
 #include <kos/dbgio.h>
@@ -129,8 +130,7 @@ static void LogOnscreen(const char* msg, int len) {
 
 	uint16_t* dst  = vram_s + Onscreen_LineOffset(pos.y);
 	int num_pixels = ONSCREEN_LINE_HEIGHT * 2 * vid_mode->width;
-	for (int i = 0; i < num_pixels; i++) dst[i] = 0;
-	//sq_set16(vram_s + Onscreen_LineOffset(pos.y), 0, ONSCREEN_LINE_HEIGHT * 2 * vid_mode->width);
+	sq_set16((uintptr_t)dst, 0, num_pixels);
 	
 	for (int i = 0; i < str.length; i++)
 	{
@@ -331,9 +331,13 @@ static int VMUFile_Do(cc_file* file, int mode) {
 	if (fd >= 0) {
 		len  = fs_total(fd);
 		data = Mem_Alloc(len, 1, "VMU data");
-		fs_read(fd, data, len);
-		
-		err = vmu_pkg_parse(data, len, &pkg);
+		if (fs_read(fd, data, len) != len) {
+			Mem_Free(data);
+			data = NULL;
+			err  = -1;
+		} else {
+			err = vmu_pkg_parse(data, len, &pkg);
+		}
 		fs_close(fd);
 	}
 	
@@ -843,6 +847,7 @@ static void WaitToStart(void) {
 	{
 		if (StartHeldOnPorts()) return;
 		Thread_Sleep(100);
+		vid_flip(-1);
 	}
 }
 
@@ -858,6 +863,7 @@ void Platform_Init(void) {
 }
 
 void Platform_NetworkInit(void) {
+	Platform_LogConst("ClassiCube - Dreamcast");
 	if (net_default_dev) return;
 
 	if (Options_GetBool("launcher-dc-skipmodem", false)) {

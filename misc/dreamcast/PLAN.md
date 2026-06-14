@@ -139,6 +139,7 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] `Gfx_UpdateTexture` — PVR RAM from `pvr_mem_malloc` does not need CPU cache flush
 - [x] `Gfx_ClearBuffers` — applies background color when color buffer requested
 - [x] `Gfx_SetViewport` — loads viewport matrix to SH4 FPU for split-screen
+- [x] Split-screen TA clip reset at `Gfx_BeginFrame` and `Gfx_OnWindowResize`
 - [x] `Gfx_DrawVb_Lines` — KOS `pvrline` example (`PVR_Line.c`, screen-space `frsqrt` expansion)
 - [x] `Gfx_UpdateTexture` — guards against partial updates on paletted 4bpp textures
 
@@ -156,7 +157,9 @@ Issues explicitly marked in `src/dreamcast/`:
 - [x] Gamepad button display names (A/B/X/Y, L/R) in controls UI
 - [x] Screenshot bind unbound (was conflicting with inventory on X)
 - [x] `CONT_D` no longer double-mapped to SELECT and CCPAD_7
-- [ ] Analog axis deadzone / scale — tuned (deadzone 12, scale 9.0); verify on hardware and dual-analog sticks
+- [x] Analog axis deadzone / scale — tuned (deadzone 12, scale 9.0)
+- [x] `BIND_SET_SPAWN` moved to B+START chord (frees START for send-chat)
+- [x] Keyboard disconnect clears stuck key state
 - [x] `Window_DrawFramebuffer` — uses `vid_flip` after 2D draw for tear-free UI
 - [x] `Window_ShowDialog` — uses `VirtualDialog_Show`
 
@@ -212,7 +215,7 @@ The backend is a full custom implementation (~1100 lines) with:
 **Performance ideas (P3):**
 
 - [ ] Profile `TransformFast.S` vs `TransformClip.S` / `TransformDirect.S` paths
-- [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation (`CommandsList_Reserve`)
+- [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation (`CommandsList_Reserve`) — initial caps raised to 2048/1024/2048
 - [ ] Consider PVR FSAA (`fsaa` flag currently `false`)
 - [ ] Document twiddle format differences vs Xbox/PS3 ports (see comments in those `Graphics_*.c` files)
 

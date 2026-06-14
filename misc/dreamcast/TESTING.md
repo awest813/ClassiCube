@@ -79,7 +79,10 @@ Verify these specifically after code changes:
 18. **Multi-stream audio** — Music + SFX concurrently without stalling (all streams polled each frame)
 19. **Skip-modem option** — Set `launcher-dc-skipmodem=true` in options.txt; boot skips modem dial
 21. **Boot on-screen log** — Modem/SD/BBA status visible on CRT during init (before launcher)
-22. **Skip-modem checkbox** — Direct connect screen toggles `launcher-dc-skipmodem`
+23. **Split-screen scissor** — Viewport clip resets each 3D frame; no bleed from prior player region
+24. **Keyboard unplug** — Disconnecting maple keyboard releases held keys
+25. **Spawn bind** — Set spawn is B+START; START alone sends chat
+26. **Menu blit perf** — Launcher framebuffer blit no longer waits vblank per dirty rect
 
 ## Known Limitations (not test failures)
 

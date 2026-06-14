@@ -543,7 +543,7 @@ static void DirectConnectScreen_Activated(struct LScreen* s_) {
 	LInput_Add(s,  &s->iptAddress,  330, "IP address:Port number..", dc_iptAddress);
 	LInput_Add(s,  &s->iptMppass,   330, "Mppass..",                 dc_iptMppass);
 #ifdef CC_BUILD_DREAMCAST
-	LCheckbox_Add(s, &s->cbSkipModem, "Skip modem dial on boot",
+	LCheckbox_Add(s, &s->cbSkipModem, "Skip modem dial on next boot",
 				DirectConnectScreen_ToggleSkipModem, dc_cbSkipModem);
 #endif
 

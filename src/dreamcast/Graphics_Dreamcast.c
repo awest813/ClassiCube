@@ -130,9 +130,9 @@ static void InitGLState(void) {
 	listPT.list_type = PVR_LIST_PT_POLY;
 	listTR.list_type = PVR_LIST_TR_POLY;
 
-	CommandsList_Reserve(&listOP, 1024 * 3);
-	CommandsList_Reserve(&listPT,  512 * 3);
-	CommandsList_Reserve(&listTR, 1024 * 3);
+	CommandsList_Reserve(&listOP, 2048 * 3);
+	CommandsList_Reserve(&listPT, 1024 * 3);
+	CommandsList_Reserve(&listTR, 2048 * 3);
 }
 
 static void InitTexMemory(void);
@@ -535,7 +535,10 @@ void Gfx_UpdateTexture(GfxResourceID texId, int originX, int originY, struct Bit
 }
 
 void Gfx_BindTexture(GfxResourceID texId) {
-	tex_active = (struct GPUTexture*)texId;
+	struct GPUTexture* tex = (struct GPUTexture*)texId;
+	if (tex_active == tex) return;
+
+	tex_active = tex;
 	stateDirty = true;
 }
 
@@ -1127,6 +1130,8 @@ static void FinishList(void) {
 	pvr_list_finish();
 }
 
+static void SubmitScissorCommand(int x, int y, int w, int h);
+
 void Gfx_BeginFrame(void) {
 	ApplyBgColor();
 	listOP.length = 0;
@@ -1134,6 +1139,8 @@ void Gfx_BeginFrame(void) {
 	listPT.length = 0;
 	gfx_scissor   = false;
 	stateDirty    = true;
+	/* Reset TA clip from prior split-screen viewport */
+	SubmitScissorCommand(0, 0, Game.Width, Game.Height);
 
 	pvr_scene_begin();
 	// Directly render PT list, buffer other lists first
@@ -1167,6 +1174,7 @@ void Gfx_EndFrame(void) {
 
 void Gfx_OnWindowResize(void) {
 	Gfx_SetViewport(0, 0, Game.Width, Game.Height);
+	Gfx_SetScissor(0, 0, Game.Width, Game.Height);
 }
 
 void Gfx_SetViewport(int x, int y, int w, int h) {

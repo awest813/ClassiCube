@@ -53,4 +53,8 @@ Texture atlas scrolling uses Gfx_DC_TextureOffU/V in the asm vertex loaders.
 TA vertex buffer: VERTEX_BUFFER_SIZE = 32 * 50000 in InitGPU.
 Command list preallocation: 2048 vertices × 3 lists (OP/PT/TR) at Gfx_Create.
 
+Poly headers are cached per TA list (OP/PT/TR) and rebuilt only when render state changes.
+Scissor USERCLIP commands are deduplicated when the clip rect is unchanged.
+4bpp palette uploads use a 4 KB colour hash for O(1) palette index lookup.
+
 Audio polls all snd_stream handles each frame per KOS multi-stream pattern.

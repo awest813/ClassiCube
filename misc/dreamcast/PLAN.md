@@ -222,6 +222,12 @@ The backend is a full custom implementation (~1100 lines) with:
 **Performance ideas (P3):**
 
 - [ ] Profile `TransformFast.S` vs `TransformClip.S` / `TransformDirect.S` paths
+- [x] Per-list poly header cache — avoids redundant `BuildPolyContext` when switching draw batches
+- [x] Scissor command cache — skip duplicate TA USERCLIP submissions
+- [x] State change early returns — `Gfx_SetFaceCulling`, `Gfx_SetScissor`
+- [x] Palette texture upload hash lookup — faster 4bpp twiddle conversion
+- [x] Line draw batching — `CommandsList_AppendMany` for selection outlines
+- [ ] Wire `ProcessVertexList` (VertexDraw.S) as TA submit path (needs `ClipLine` ABI fix)
 - [ ] Tune `VERTEX_BUFFER_SIZE` and list buffer preallocation — PT/OP/TR initial caps at 2048×3; TA buffer 32×50000
 - [ ] Consider PVR FSAA (`fsaa` flag currently `false`)
 - [ ] Document twiddle format differences vs Xbox/PS3 ports (see comments in those `Graphics_*.c` files)

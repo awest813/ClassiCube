@@ -14,6 +14,10 @@
 
 static cc_bool renderingDisabled;
 static cc_bool stateDirty;
+static cc_uint8 poly_hdr_valid;
+
+static pvr_poly_hdr_t poly_hdr_cache[3];
+static int scissor_x, scissor_y, scissor_w, scissor_h;
 
 #define VERTEX_BUFFER_SIZE 32 * 50000
 #define PT_ALPHA_REF 0x011c
@@ -64,6 +68,20 @@ static void CommandsList_Append(struct CommandsList* list, const void* cmd) {
 	
 	memcpy(dst, cmd, VERTEX_SIZE);
 	list->length++;
+}
+
+static void CommandsList_AppendMany(struct CommandsList* list, const void* cmds, cc_uint32 count) {
+	if (!count) return;
+	void* dst = CommandsList_Reserve(list, list->length + count);
+	if (!dst) Process_Abort("Out of memory");
+
+	memcpy(dst, cmds, count * VERTEX_SIZE);
+	list->length += count;
+}
+
+static CC_INLINE void Gfx_MarkStateDirty(void) {
+	stateDirty     = true;
+	poly_hdr_valid = 0;
 }
 
 
@@ -125,7 +143,7 @@ static void InitGLState(void) {
 	gfx_depthWrite = true;
 	gfx_fogEnabled = false;
 	
-	stateDirty       = true;
+	Gfx_MarkStateDirty();
 	listOP.list_type = PVR_LIST_OP_POLY;
 	listPT.list_type = PVR_LIST_PT_POLY;
 	listTR.list_type = PVR_LIST_TR_POLY;
@@ -417,13 +435,33 @@ static CC_INLINE void ConvertTexture_4444(cc_uint16* dst, struct Bitmap* bmp, in
 	}
 }
 
+#define PAL_LOOKUP_SIZE 4096
+
+static CC_INLINE void BuildPaletteLookup(BitmapCol* palette, int pal_count, cc_uint8* lookup) {
+	memset(lookup, 0xFF, PAL_LOOKUP_SIZE);
+	for (int i = 0; i < pal_count; i++) 
+	{
+		cc_uint32 key = palette[i] % PAL_LOOKUP_SIZE;
+		lookup[key] = (cc_uint8)i;
+	}
+}
+
+static CC_INLINE int PaletteIndex(BitmapCol* palette, int pal_count, cc_uint8* lookup, BitmapCol color) {
+	cc_uint32 key = color % PAL_LOOKUP_SIZE;
+	cc_uint8 idx  = lookup[key];
+	if (idx < pal_count && palette[idx] == color) return idx;
+	return FindInPalette(palette, pal_count, color);
+}
+
 static CC_INLINE void ConvertTexture_Palette(cc_uint16* dst, struct Bitmap* bmp, int rowWidth, BitmapCol* palette, int pal_count) {
 	int width  = (bmp->width  + 1) >> 1;
 	int height = (bmp->height + 1) >> 1;
 
 	unsigned maskX, maskY;
 	unsigned X = 0, Y = 0;
+	cc_uint8 pal_lookup[PAL_LOOKUP_SIZE];
 	TwiddleCalcFactors(width, height, &maskX, &maskY);
+	BuildPaletteLookup(palette, pal_count, pal_lookup);
 	
 	for (int y = 0; y < height; y++)
 	{
@@ -433,10 +471,10 @@ static CC_INLINE void ConvertTexture_Palette(cc_uint16* dst, struct Bitmap* bmp,
 		
 		for (int x = 0; x < width; x++, src += 2, next += 2)
 		{
-			int pal_00 = FindInPalette(palette, pal_count,  src[0]);
-			int pal_10 = FindInPalette(palette, pal_count,  src[1]);
-			int pal_01 = FindInPalette(palette, pal_count, next[0]);
-			int pal_11 = FindInPalette(palette, pal_count, next[1]);
+			int pal_00 = PaletteIndex(palette, pal_count, pal_lookup, src[0]);
+			int pal_10 = PaletteIndex(palette, pal_count, pal_lookup, src[1]);
+			int pal_01 = PaletteIndex(palette, pal_count, pal_lookup, next[0]);
+			int pal_11 = PaletteIndex(palette, pal_count, pal_lookup, next[1]);
 
 			dst[X | Y] = pal_00 | (pal_01 << 4) | (pal_10 << 8) | (pal_11 << 12);
 
@@ -542,7 +580,7 @@ void Gfx_BindTexture(GfxResourceID texId) {
 	if (tex_active == tex) return;
 
 	tex_active = tex;
-	stateDirty = true;
+	Gfx_MarkStateDirty();
 }
 
 void Gfx_DeleteTexture(GfxResourceID* texId) {
@@ -639,6 +677,23 @@ static CC_NOINLINE void BuildPolyContext(pvr_poly_hdr_t* dst, int list_type) {
 	dst->mode3 |= ((uint32_t)tex_ptr & 0x00fffff8) >> 3;
 }
 
+static CC_INLINE int PolyCacheIndex(int list_type) {
+	if (list_type == PVR_LIST_OP_POLY) return 0;
+	if (list_type == PVR_LIST_PT_POLY) return 1;
+	return 2;
+}
+
+static void GetPolyHeader(pvr_poly_hdr_t* dst, int list_type) {
+	int idx = PolyCacheIndex(list_type);
+	cc_uint8 mask = (cc_uint8)(1 << idx);
+
+	if (!(poly_hdr_valid & mask)) {
+		BuildPolyContext(&poly_hdr_cache[idx], list_type);
+		poly_hdr_valid |= mask;
+	}
+	memcpy(dst, &poly_hdr_cache[idx], sizeof(*dst));
+}
+
 
 /*########################################################################################################################*
 *-----------------------------------------------------State management----------------------------------------------------*
@@ -653,12 +708,13 @@ static void ApplyBgColor(void) {
 }
 
 void Gfx_SetFaceCulling(cc_bool enabled) { 
+	if (gfx_culling == enabled) return;
 	gfx_culling = enabled;
-	stateDirty  = true;
+	Gfx_MarkStateDirty();
 }
 
 static void SetAlphaBlend(cc_bool enabled) {
-	stateDirty  = true;
+	Gfx_MarkStateDirty();
 }
 void Gfx_SetAlphaArgBlend(cc_bool enabled) { }
 
@@ -676,18 +732,18 @@ void Gfx_SetDepthWrite(cc_bool enabled) {
 	if (gfx_depthWrite == enabled) return;
 	
 	gfx_depthWrite = enabled;
-	stateDirty     = true;
+	Gfx_MarkStateDirty();
 }
 
 void Gfx_SetDepthTest(cc_bool enabled) { 
 	if (gfx_depthTest == enabled) return;
 	
 	gfx_depthTest = enabled;
-	stateDirty    = true;
+	Gfx_MarkStateDirty();
 }
 
 static void SetAlphaTest(cc_bool enabled) {
-	stateDirty    = true;
+	Gfx_MarkStateDirty();
 }
 
 void Gfx_DepthOnlyRendering(cc_bool depthOnly) {
@@ -777,7 +833,7 @@ void Gfx_SetFog(cc_bool enabled) {
 	if (gfx_fogEnabled == enabled) return;
 	
 	gfx_fogEnabled = enabled;
-	stateDirty     = true;
+	Gfx_MarkStateDirty();
 	if (enabled && gfx_fogMode >= 0) UpdateFog();
 }
 
@@ -888,8 +944,8 @@ void Gfx_DisableTextureOffset(void) {
 	textureOffset  = false;
 }
 
-static void ApplyTextureOffsetGlobals(void) {
-	if (textureOffset) {
+static void ApplyTextureOffsetGlobals(cc_bool textured) {
+	if (textured && textureOffset) {
 		Gfx_DC_TextureOffU = textureOffsetX;
 		Gfx_DC_TextureOffV = textureOffsetY;
 	} else {
@@ -947,14 +1003,14 @@ static void DrawQuads(int count, void* src, DrawHints hints) {
 	cc_bool noclip = (hints & DRAW_HINT_NOCLIP) || gfx_rendering2D;
 	cc_uint32 header_required = (list->length == 0) || stateDirty;
 
-	ApplyTextureOffsetGlobals();
+	ApplyTextureOffsetGlobals(gfx_format == VERTEX_FORMAT_TEXTURED);
 
 	if (list == direct && noclip) {
 		struct pvr_poly_hdr_t hdr;
 
 		if (gfx_format == VERTEX_FORMAT_TEXTURED) {
 			if (header_required) {
-				BuildPolyContext(&hdr, list->list_type);
+				GetPolyHeader(&hdr, list->list_type);
 				SubmitCommands((Vertex*)&hdr, 1);
 				stateDirty = false;
 			}
@@ -968,7 +1024,7 @@ static void DrawQuads(int count, void* src, DrawHints hints) {
 
 		if (gfx_format == VERTEX_FORMAT_COLOURED) {
 			if (header_required) {
-				BuildPolyContext(&hdr, list->list_type);
+				GetPolyHeader(&hdr, list->list_type);
 				SubmitCommands((Vertex*)&hdr, 1);
 				stateDirty = false;
 			}
@@ -986,7 +1042,7 @@ static void DrawQuads(int count, void* src, DrawHints hints) {
 	if (!beg) return;
 
 	if (header_required) {
-		BuildPolyContext((pvr_poly_hdr_t*)beg, list->list_type);
+		GetPolyHeader((pvr_poly_hdr_t*)beg, list->list_type);
 		stateDirty = false;
 		list->length++;
 		beg++;
@@ -1012,7 +1068,7 @@ void Gfx_SetVertexFormat(VertexFormat fmt) {
 	if (fmt == gfx_format) return;
 	gfx_format = fmt;
 	gfx_stride = strideSizes[fmt];
-	stateDirty = true;
+	Gfx_MarkStateDirty();
 }
 
 static void ProjectToScreen(const struct VertexColoured* in, vec3f_t* out) {
@@ -1033,6 +1089,7 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 	vec3f_t v1, v2;
 	matrix_t saved;
 	int lineCount;
+	cc_bool need_header;
 
 	if (!verticesCount || renderingDisabled) return;
 	lineCount = verticesCount >> 1;
@@ -1043,8 +1100,12 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 	mat_apply(&_proj);
 	mat_apply(&_view);
 
-	BuildPolyContext(&hdr, PVR_LIST_OP_POLY);
-	CommandsList_Append(&listOP, &hdr);
+	need_header = (listOP.length == 0) || stateDirty;
+	if (need_header) {
+		GetPolyHeader(&hdr, PVR_LIST_OP_POLY);
+		CommandsList_Append(&listOP, &hdr);
+		stateDirty = false;
+	}
 
 	src = (struct VertexColoured*)gfx_vertices;
 	for (int i = 0; i < lineCount; i++) {
@@ -1055,10 +1116,7 @@ void Gfx_DrawVb_Lines(int verticesCount) {
 		ProjectToScreen(b, &v2);
 		PVR_Line_BuildVerts(lineVerts, &v1, &v2, 1.0f, PackedCol_ToPVR(a->Col));
 
-		CommandsList_Append(&listOP, &lineVerts[0]);
-		CommandsList_Append(&listOP, &lineVerts[1]);
-		CommandsList_Append(&listOP, &lineVerts[2]);
-		CommandsList_Append(&listOP, &lineVerts[3]);
+		CommandsList_AppendMany(&listOP, lineVerts, 4);
 	}
 	mat_load(&saved);
 }
@@ -1159,7 +1217,7 @@ void Gfx_BeginFrame(void) {
 	listTR.length = 0;
 	listPT.length = 0;
 	gfx_scissor   = false;
-	stateDirty    = true;
+	Gfx_MarkStateDirty();
 	/* Reset TA clip from prior split-screen viewport */
 	SubmitScissorCommand(0, 0, Game.Width, Game.Height);
 
@@ -1194,6 +1252,7 @@ void Gfx_EndFrame(void) {
 }
 
 void Gfx_OnWindowResize(void) {
+	scissor_x = -1;
 	Gfx_SetViewport(0, 0, Game.Width, Game.Height);
 	Gfx_SetScissor(0, 0, Game.Width, Game.Height);
 }
@@ -1216,6 +1275,13 @@ void Gfx_SetViewport(int x, int y, int w, int h) {
 }
 
 static void SubmitScissorCommand(int x, int y, int w, int h) {
+	if (scissor_x == x && scissor_y == y && scissor_w == w && scissor_h == h) return;
+
+	scissor_x = x;
+	scissor_y = y;
+	scissor_w = w;
+	scissor_h = h;
+
 	struct pvr_clip_command {
 		uint32_t cmd; // TA command
 		uint32_t mode1, mode2, mode3; // not used in USERCLIP command
@@ -1237,9 +1303,15 @@ static void SubmitScissorCommand(int x, int y, int w, int h) {
 }
 
 void Gfx_SetScissor(int x, int y, int w, int h) {
-	cc_bool active    = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
+	cc_bool active = x != 0 || y != 0 || w != Game.Width || h != Game.Height;
+
+	if (gfx_scissor == active) {
+		if (!active) return;
+		if (scissor_x == x && scissor_y == y && scissor_w == w && scissor_h == h) return;
+	}
+
 	gfx_scissor = active;
-	stateDirty  = true;
+	Gfx_MarkStateDirty();
 
 	if (!active) {
 		/* Reset TA clip state when returning to full-screen rendering */
